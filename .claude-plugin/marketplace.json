@@ -1,0 +1,14 @@
+{
+  "name": "lodestar-marketplace",
+  "owner": {
+    "name": "Dmitry Antonenko",
+    "email": "dmitry@buzzwoo.de"
+  },
+  "plugins": [
+    {
+      "name": "lodestar",
+      "source": "./",
+      "description": "Dmitry's custom workflow, review, rules, ClickUp, and reporting skills."
+    }
+  ]
+}
