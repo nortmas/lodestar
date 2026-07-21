@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ARTIFACT_TITLE}} — Design Variations</title>
+
+    <!-- Project webfonts (if the discovered design system needs any). Inject
+         <link>/<@import> here; leave empty to fall back to the system stack. -->
+    {{FONT_LINKS}}
+
+    <!-- Tailwind (Play CDN) configured with the PROJECT'S live tokens, discovered
+         per run (see references/design-system-discovery.md). The defaults below are
+         neutral placeholders — override them via {{TOKENS_COLORS}}/{{TOKENS_FONTS}}
+         using the project's own token names. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        /* {{TOKENS_COLORS}} */
+                        bg: '#f5f5f7',
+                        surface: '#ffffff',
+                        surface2: '#f0f0f2',
+                        'border-default': '#e5e5ea',
+                        primary: '#1d1d1f',
+                        muted: '#6b7280',
+                        accent: '#3d5f8f',
+                        danger: '#b5463b',
+                        success: '#5b8c5a',
+                    },
+                    fontFamily: {
+                        /* {{TOKENS_FONTS}} */
+                        sans: ['system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+                        mono: ['ui-monospace', 'SF Mono', 'Menlo', 'monospace'],
+                    },
+                },
+            },
+        };
+    </script>
+
+    <style>
+        :root {
+            color-scheme: light;
+        }
+        html,
+        body {
+            background: #f5f5f7;
+            color: #1d1d1f;
+            font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        }
+
+        /* ============================================================
+           OVERLAY CHROME — toolbar, pins, popover. Isolated from
+           variation styles so variations cannot accidentally inherit.
+           ============================================================ */
+        .dv-toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid #e5e7eb;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        .dv-toolbar-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111;
+        }
+        .dv-toolbar-sub {
+            font-size: 12px;
+            color: #6b7280;
+            margin-left: 8px;
+        }
+        .dv-toolbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dv-btn {
+            border: 1px solid #d1d5db;
+            background: white;
+            color: #111;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .dv-btn:hover {
+            background: #f3f4f6;
+        }
+        .dv-btn-primary {
+            background: #111;
+            color: white;
+            border-color: #111;
+        }
+        .dv-btn-primary:hover {
+            background: #000;
+        }
+        .dv-btn-danger {
+            border-color: #ef4444;
+            color: #ef4444;
+        }
+        .dv-btn-danger:hover {
+            background: #fef2f2;
+        }
+        .dv-count-badge {
+            background: #ef4444;
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 999px;
+            padding: 1px 7px;
+            min-width: 18px;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        /* Variation container — must be positioned so pins anchor to it */
+        [data-variation] {
+            position: relative;
+        }
+
+        /* Pins */
+        .dv-pin {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #ef4444;
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), 0 0 0 2px white;
+            transform: translate(-50%, -50%);
+            z-index: 30;
+            font-family: system-ui, -apple-system, sans-serif;
+            user-select: none;
+            transition: transform 0.12s ease;
+        }
+        .dv-pin:hover {
+            transform: translate(-50%, -50%) scale(1.12);
+        }
+
+        /* Popover */
+        .dv-popover {
+            position: absolute;
+            z-index: 50;
+            width: 280px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            padding: 12px;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        .dv-popover-header {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 6px;
+        }
+        .dv-popover-textarea {
+            width: 100%;
+            min-height: 72px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 8px;
+            font-size: 13px;
+            font-family: inherit;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        .dv-popover-textarea:focus {
+            outline: none;
+            border-color: #111;
+        }
+        .dv-popover-hint {
+            font-size: 10px;
+            color: #9ca3af;
+            margin-top: 6px;
+        }
+        .dv-popover-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            gap: 6px;
+        }
+
+        /* Native <details>/<summary> reset for variation content that uses collapsible sections */
+        details > summary {
+            list-style: none;
+            cursor: pointer;
+        }
+        details > summary::-webkit-details-marker {
+            display: none;
+        }
+        .dv-chevron {
+            transition: transform 0.2s ease;
+        }
+        details[open] > summary .dv-chevron {
+            transform: rotate(180deg);
+        }
+
+        /* Variation separator/header */
+        .dv-variation-header {
+            padding: 16px 20px 8px;
+            border-bottom: 1px dashed #e5e7eb;
+            margin-top: 24px;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        .dv-variation-header:first-of-type {
+            margin-top: 0;
+        }
+        .dv-variation-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .dv-variation-desc {
+            font-size: 13px;
+            color: #374151;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dv-toolbar">
+        <div>
+            <span class="dv-toolbar-title">{{ARTIFACT_TITLE}}</span>
+            <span class="dv-toolbar-sub" id="dv-variation-count"></span>
+        </div>
+        <div class="dv-toolbar-actions">
+            <span class="dv-count-badge" id="dv-comment-count" style="display: none">0</span>
+            <button class="dv-btn" id="dv-export">Export JSON</button>
+            <button class="dv-btn dv-btn-danger" id="dv-clear">Clear</button>
+        </div>
+    </div>
+
+    <main id="dv-root">
+        <!-- VARIATIONS_START -->
+        {{VARIATIONS}}
+        <!-- VARIATIONS_END -->
+    </main>
+
+    <script>
+        (function () {
+            'use strict';
+
+            const ARTIFACT_ID = '{{ARTIFACT_ID}}';
+            const STORAGE_KEY = 'design-variations:' + ARTIFACT_ID;
+
+            // ------------------------- storage -------------------------
+            function loadComments() {
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    return raw ? JSON.parse(raw) : [];
+                } catch (err) {
+                    console.warn('design-variations: failed to parse stored comments', err);
+                    return [];
+                }
+            }
+
+            function saveComments(comments) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(comments));
+            }
+
+            function uid() {
+                return 'c_' + Math.random().toString(36).slice(2, 10) + '_' + Date.now().toString(36);
+            }
+
+            // ------------------------- state -------------------------
+            let comments = loadComments();
+            let activePopover = null;
+
+            // ------------------------- rendering -------------------------
+            function renderPins() {
+                document.querySelectorAll('.dv-pin').forEach((el) => el.remove());
+
+                const byVariation = new Map();
+                comments.forEach((c) => {
+                    if (!byVariation.has(c.variationId)) byVariation.set(c.variationId, []);
+                    byVariation.get(c.variationId).push(c);
+                });
+
+                byVariation.forEach((list, variationId) => {
+                    const container = document.querySelector('[data-variation="' + variationId + '"]');
+                    if (!container) return;
+                    list.forEach((comment, idx) => {
+                        const pin = document.createElement('div');
+                        pin.className = 'dv-pin';
+                        pin.textContent = String(idx + 1);
+                        pin.style.left = comment.xPct + '%';
+                        pin.style.top = comment.yPct + '%';
+                        pin.dataset.commentId = comment.id;
+                        pin.title = comment.text.slice(0, 120);
+                        pin.addEventListener('click', (ev) => {
+                            ev.stopPropagation();
+                            openPopover({ container, comment });
+                        });
+                        container.appendChild(pin);
+                    });
+                });
+
+                updateCountBadge();
+            }
+
+            function updateCountBadge() {
+                const badge = document.getElementById('dv-comment-count');
+                const total = comments.length;
+                if (total === 0) {
+                    badge.style.display = 'none';
+                } else {
+                    badge.style.display = '';
+                    badge.textContent = String(total);
+                }
+            }
+
+            // ------------------------- popover -------------------------
+            function closePopover() {
+                if (activePopover) {
+                    activePopover.remove();
+                    activePopover = null;
+                }
+                document.removeEventListener('keydown', onGlobalKey);
+                document.removeEventListener('mousedown', onGlobalClick, true);
+            }
+
+            function onGlobalKey(ev) {
+                if (ev.key === 'Escape') {
+                    ev.preventDefault();
+                    closePopover();
+                }
+            }
+
+            function onGlobalClick(ev) {
+                if (activePopover && !activePopover.contains(ev.target) && !ev.target.classList.contains('dv-pin')) {
+                    closePopover();
+                }
+            }
+
+            function openPopover({ container, xPct, yPct, comment }) {
+                closePopover();
+
+                const isEdit = Boolean(comment);
+                const rect = container.getBoundingClientRect();
+
+                // If opening from a pin, derive xPct/yPct from the comment
+                const pctX = isEdit ? comment.xPct : xPct;
+                const pctY = isEdit ? comment.yPct : yPct;
+
+                const pop = document.createElement('div');
+                pop.className = 'dv-popover';
+                pop.innerHTML =
+                    '<div class="dv-popover-header">' +
+                    (isEdit ? 'Edit comment' : 'New comment') +
+                    '</div>' +
+                    '<textarea class="dv-popover-textarea" placeholder="Type your feedback..."></textarea>' +
+                    '<div class="dv-popover-hint">Enter to save · Shift+Enter newline · Esc to cancel</div>' +
+                    '<div class="dv-popover-actions">' +
+                    '<div>' +
+                    (isEdit
+                        ? '<button class="dv-btn dv-btn-danger" data-action="delete">Delete</button>'
+                        : '') +
+                    '</div>' +
+                    '<div style="display:flex; gap:6px">' +
+                    '<button class="dv-btn" data-action="cancel">Cancel</button>' +
+                    '<button class="dv-btn dv-btn-primary" data-action="save">Save</button>' +
+                    '</div>' +
+                    '</div>';
+
+                // Position popover: place near click/pin, clamp within container
+                pop.style.left = Math.min(Math.max(pctX, 0), 100) + '%';
+                pop.style.top = Math.min(Math.max(pctY, 0), 100) + '%';
+                pop.style.transform = 'translate(12px, 12px)';
+
+                container.appendChild(pop);
+
+                // If the popover overflows the right edge, flip to left
+                requestAnimationFrame(() => {
+                    const popRect = pop.getBoundingClientRect();
+                    const contRect = container.getBoundingClientRect();
+                    if (popRect.right > contRect.right - 8) {
+                        pop.style.transform = 'translate(calc(-100% - 12px), 12px)';
+                    }
+                    if (popRect.bottom > window.innerHeight - 8) {
+                        const currentTransform = pop.style.transform.replace(/translate\(([^,]+),\s*[^)]+\)/, 'translate($1, calc(-100% - 12px))');
+                        pop.style.transform = currentTransform;
+                    }
+                });
+
+                activePopover = pop;
+
+                const textarea = pop.querySelector('.dv-popover-textarea');
+                textarea.value = isEdit ? comment.text : '';
+                textarea.focus();
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+                function submit() {
+                    const text = textarea.value.trim();
+                    if (!text) {
+                        closePopover();
+                        return;
+                    }
+                    if (isEdit) {
+                        const existing = comments.find((c) => c.id === comment.id);
+                        if (existing) {
+                            existing.text = text;
+                            existing.updatedAt = new Date().toISOString();
+                        }
+                    } else {
+                        comments.push({
+                            id: uid(),
+                            variationId: container.dataset.variation,
+                            variationLabel: container.dataset.variationLabel || container.dataset.variation,
+                            xPct: pctX,
+                            yPct: pctY,
+                            text,
+                            createdAt: new Date().toISOString(),
+                        });
+                    }
+                    saveComments(comments);
+                    renderPins();
+                    closePopover();
+                }
+
+                textarea.addEventListener('keydown', (ev) => {
+                    if (ev.key === 'Enter' && !ev.shiftKey) {
+                        ev.preventDefault();
+                        submit();
+                    }
+                });
+
+                pop.addEventListener('click', (ev) => {
+                    const action = ev.target.dataset && ev.target.dataset.action;
+                    if (!action) return;
+                    if (action === 'save') submit();
+                    if (action === 'cancel') closePopover();
+                    if (action === 'delete') {
+                        comments = comments.filter((c) => c.id !== comment.id);
+                        saveComments(comments);
+                        renderPins();
+                        closePopover();
+                    }
+                });
+
+                document.addEventListener('keydown', onGlobalKey);
+                document.addEventListener('mousedown', onGlobalClick, true);
+            }
+
+            // ------------------------- click capture on variations -------------------------
+            const INTERACTIVE_TAGS = new Set(['SUMMARY', 'BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT', 'LABEL']);
+
+            function isInteractive(startEl, boundary) {
+                let node = startEl;
+                while (node && node !== boundary) {
+                    if (node.tagName && INTERACTIVE_TAGS.has(node.tagName)) return true;
+                    if (node.dataset && node.dataset.noComment !== undefined) return true;
+                    node = node.parentElement;
+                }
+                return false;
+            }
+
+            function bindVariationClicks() {
+                const variations = document.querySelectorAll('[data-variation]');
+                document.getElementById('dv-variation-count').textContent =
+                    variations.length + (variations.length === 1 ? ' variation' : ' variations');
+
+                variations.forEach((container) => {
+                    container.addEventListener('click', (ev) => {
+                        // Ignore clicks on pins (pins handle their own click)
+                        if (ev.target.classList.contains('dv-pin')) return;
+                        // Ignore clicks inside an active popover
+                        if (activePopover && activePopover.contains(ev.target)) return;
+                        // Ignore clicks on native interactive elements (toggles, links, form fields)
+                        // or explicit opt-outs via data-no-comment
+                        if (isInteractive(ev.target, container)) return;
+
+                        const rect = container.getBoundingClientRect();
+                        const xPct = ((ev.clientX - rect.left) / rect.width) * 100;
+                        const yPct = ((ev.clientY - rect.top) / rect.height) * 100;
+                        openPopover({ container, xPct, yPct });
+                    });
+                });
+            }
+
+            // ------------------------- toolbar actions -------------------------
+            document.getElementById('dv-export').addEventListener('click', async () => {
+                const payload = {
+                    artifactId: ARTIFACT_ID,
+                    exportedAt: new Date().toISOString(),
+                    totalComments: comments.length,
+                    comments: comments.map((c) => ({
+                        variationId: c.variationId,
+                        variationLabel: c.variationLabel,
+                        xPct: Math.round(c.xPct * 100) / 100,
+                        yPct: Math.round(c.yPct * 100) / 100,
+                        text: c.text,
+                        createdAt: c.createdAt,
+                        updatedAt: c.updatedAt,
+                    })),
+                };
+                const json = JSON.stringify(payload, null, 2);
+                try {
+                    await navigator.clipboard.writeText(json);
+                    const btn = document.getElementById('dv-export');
+                    const original = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    setTimeout(() => (btn.textContent = original), 1200);
+                } catch (err) {
+                    console.error('Clipboard write failed', err);
+                    alert('Could not copy to clipboard. JSON logged to console.');
+                    console.log(json);
+                }
+            });
+
+            document.getElementById('dv-clear').addEventListener('click', () => {
+                if (comments.length === 0) return;
+                if (!confirm('Delete all ' + comments.length + ' comments for this artifact?')) return;
+                comments = [];
+                saveComments(comments);
+                renderPins();
+            });
+
+            // ------------------------- init -------------------------
+            bindVariationClicks();
+            renderPins();
+
+            // Re-render pins on resize (coordinates are %-based, but this is cheap insurance)
+            let resizeTimer = null;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(renderPins, 120);
+            });
+        })();
+    </script>
+</body>
+</html>

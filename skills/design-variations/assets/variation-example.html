@@ -1,0 +1,32 @@
+<!-- Example variation section. Each variation MUST follow this structure:
+     - Outer <section> with data-variation="<unique-slug>" and data-variation-label="<human label>"
+     - A .dv-variation-header with title + optional description
+     - The actual variation content in a wrapper <div> below the header
+     The outer <section> is the click-capture surface — pins position within it.
+     Style the content with the project's OWN tokens injected via {{TOKENS_COLORS}}
+     / {{TOKENS_FONTS}} — the class names below (bg-surface, text-muted, accent,
+     border-default) are placeholders; use whatever names the project defines. -->
+
+<section
+    data-variation="variation-1"
+    data-variation-label="Variation 1 — Bordered, calm"
+    class="mx-auto max-w-3xl px-6 pb-10"
+>
+    <div class="dv-variation-header">
+        <div class="dv-variation-title">Variation 1 — Bordered, calm</div>
+        <div class="dv-variation-desc">
+            Short rationale: sits on the surface token with a hairline border, accent reserved for the single active affordance.
+        </div>
+    </div>
+
+    <!-- Variation content starts here. Use utilities bound to the project tokens. -->
+    <div class="mt-4 rounded-lg border border-default bg-surface p-5">
+        <div class="font-mono text-xs uppercase tracking-wide text-muted">Label</div>
+        <p class="mt-1 font-sans text-base text-primary">
+            A concise line of representative content for this element.
+        </p>
+        <button class="mt-3 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white">
+            Action
+        </button>
+    </div>
+</section>

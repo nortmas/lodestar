@@ -17,6 +17,8 @@ All skills are invoked as `/lodestar:<skill>`.
 | check-rules | `/lodestar:check-rules` | Check code against `.claude/rules/` and report violations |
 | audit-solution | `/lodestar:audit-solution` | Vet plans/solutions for workarounds and fragile approaches |
 | error-handling-audit | `/lodestar:error-handling-audit` | Find silent failures and logging gaps (Python, Laravel, React) |
+| design-fresh | `/lodestar:design-fresh` | Intentional, trend-aware UI with a creative reset on demand + cross-session design journal |
+| design-variations | `/lodestar:design-variations` | Render N distinct design options as one click-to-comment HTML artifact |
 | clickup-tasks | `/lodestar:clickup-tasks` | Draft and create ClickUp tasks to board convention |
 | clickup-comments | `/lodestar:clickup-comments` | Draft and post ClickUp comments in plain English |
 | pm-report | `/lodestar:pm-report` | Plain-language, non-technical session report for a PM |
