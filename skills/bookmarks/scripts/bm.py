@@ -1526,15 +1526,14 @@ def cmd_save(args):
 
     staged = subprocess.run(["git", "-C", DATA_DIR, "diff", "--cached", "--name-only"],
                             capture_output=True, text=True).stdout.split()
-    if not staged:
+    if staged:
+        res = subprocess.run(["git", "-C", DATA_DIR, "commit", "-m", args.message],
+                             capture_output=True, text=True)
+        if res.returncode != 0:
+            die(f"git commit failed: {(res.stderr or res.stdout).strip()}")
+        print(f"committed: {', '.join(staged)}")
+    else:
         print("nothing changed since the last save")
-        return
-
-    res = subprocess.run(["git", "-C", DATA_DIR, "commit", "-m", args.message],
-                         capture_output=True, text=True)
-    if res.returncode != 0:
-        die(f"git commit failed: {(res.stderr or res.stdout).strip()}")
-    print(f"committed: {', '.join(staged)}")
 
     if args.no_push:
         return
@@ -1543,22 +1542,36 @@ def cmd_save(args):
     if not has_remote:
         print("no remote configured; committed locally only")
         return
+    # Reached even when nothing was committed just now: a commit that exists only
+    # locally is one machine failure away from being the only copy.
+    unpushed = subprocess.run(
+        ["git", "-C", DATA_DIR, "log", "--oneline", "@{u}.."],
+        capture_output=True, text=True)
+    if not staged and unpushed.returncode == 0 and not unpushed.stdout.strip():
+        print("remote is up to date")
+        return
+
+    branch = subprocess.run(
+        ["git", "-C", DATA_DIR, "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True, text=True).stdout.strip()
+    remote_has_branch = subprocess.run(
+        ["git", "-C", DATA_DIR, "ls-remote", "--heads", "origin", branch],
+        capture_output=True, text=True).stdout.strip()
 
     # index.jsonl is one record per line keyed by guid, so a rebase conflict is
     # mechanically resolvable — but only if we find out about it here rather than
-    # on the next machine.
+    # on the next machine. Nothing to rebase onto when the remote has no such
+    # branch yet: that is a first push, not a divergence.
     pull = subprocess.run(["git", "-C", DATA_DIR, "pull", "--rebase"],
-                          capture_output=True, text=True)
-    if pull.returncode != 0:
+                          capture_output=True, text=True) if remote_has_branch else None
+    if pull is not None and pull.returncode != 0:
         # Never leave the repo mid-rebase on a detached HEAD. Aborting restores a
         # clean branch with the commit safely on it — the user can then resolve
         # deliberately instead of being walked further into a broken state.
         subprocess.run(["git", "-C", DATA_DIR, "rebase", "--abort"],
                        capture_output=True, text=True)
-        branch = subprocess.run(
-            ["git", "-C", DATA_DIR, "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True, text=True).stdout.strip() or "your branch"
-        print(f"commit succeeded and is safe on {branch}, but the remote has "
+        print(f"commit succeeded and is safe on {branch or 'your branch'}, "
+              f"but the remote has "
               f"diverged:\n{(pull.stderr or pull.stdout).strip()}\n"
               f"  The rebase was aborted, so {DATA_DIR} is clean.\n"
               f"  Reconcile by hand:\n"
@@ -1569,7 +1582,10 @@ def cmd_save(args):
               f"  Then run `bm.py sync` to rebuild index.db.", file=sys.stderr)
         sys.exit(3)
 
-    push = subprocess.run(["git", "-C", DATA_DIR, "push"], capture_output=True, text=True)
+    push_cmd = ["git", "-C", DATA_DIR, "push"]
+    if not remote_has_branch and branch:
+        push_cmd += ["-u", "origin", branch]   # first push needs the upstream set
+    push = subprocess.run(push_cmd, capture_output=True, text=True)
     if push.returncode != 0:
         print(f"warning: commit succeeded but push failed:\n"
               f"{(push.stderr or push.stdout).strip()}", file=sys.stderr)
