@@ -866,12 +866,240 @@ def cmd_check_links(args):
         tally[rec.get("link", "unchecked")] = tally.get(rec.get("link", "unchecked"), 0) + 1
     print(json.dumps(tally, indent=2))
 
+    # A sweep is only useful once someone can act on it, so hand over the browsable
+    # report rather than leaving 300 verdicts sitting in a JSONL file.
+    if not args.no_report:
+        path, total, checked = write_html_report()
+        print(f"\nreport: {path}  ({total} bookmarks, {checked} links checked)")
+        print("open it, decide, then build a patch with the guids it lists")
+
+
+REPORT_CSS = """
+ :root { color-scheme: light dark;
+   --bg:#fbfaf8; --fg:#1a1a1a; --mut:#6b6660; --line:#e2ded8; --card:#fff;
+   --ev:#0d7a5f; --evb:#dff3ec; --ob:#9a5b00; --obb:#fdefd8; --gg:#5a5f8a; --ggb:#e9eaf5; }
+ @media (prefers-color-scheme: dark) { :root {
+   --bg:#141311; --fg:#eceae6; --mut:#94908a; --line:#2c2a27; --card:#1c1b19;
+   --ev:#5cd6b0; --evb:#12332a; --ob:#e0a44e; --obb:#3a2a10; --gg:#a8adda; --ggb:#22243a; } }
+ * { box-sizing:border-box }
+ body { margin:0; background:var(--bg); color:var(--fg);
+   font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+ header { padding:32px 28px 20px; border-bottom:1px solid var(--line); }
+ h1 { margin:0 0 6px; font-size:26px; letter-spacing:-.02em; }
+ .meta { color:var(--mut); font-size:13px; }
+ nav { position:sticky; top:0; z-index:5; display:flex; flex-wrap:wrap; gap:6px;
+   padding:12px 28px; background:var(--bg); border-bottom:1px solid var(--line); }
+ nav a { color:var(--fg); text-decoration:none; font-size:13px; padding:5px 11px;
+   border:1px solid var(--line); border-radius:99px; background:var(--card); }
+ nav a:hover { border-color:var(--mut); }
+ nav a b { color:var(--mut); font-weight:600; margin-left:3px; }
+ section { padding:30px 28px; border-bottom:1px solid var(--line); }
+ h2 { font-size:19px; margin:0 0 6px; letter-spacing:-.01em; }
+ h2 .n { color:var(--mut); font-weight:400; }
+ .blurb { margin:0 0 4px; color:var(--mut); max-width:70ch; font-size:14px; }
+ .where { margin:0 0 16px; color:var(--mut); font-size:12px; max-width:110ch; }
+ .tw { overflow-x:auto; }
+ table { width:100%; border-collapse:collapse; font-size:13.5px; }
+ th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+   color:var(--mut); font-weight:600; padding:0 12px 8px 0; border-bottom:1px solid var(--line);
+   cursor:pointer; user-select:none; white-space:nowrap; }
+ th:hover { color:var(--fg); }
+ th::after { content:"\\2195"; opacity:.28; margin-left:5px; font-size:10px; }
+ th.asc::after { content:"\\2191"; opacity:1; }
+ th.desc::after { content:"\\2193"; opacity:1; }
+ td { padding:9px 12px 9px 0; border-bottom:1px solid var(--line); vertical-align:top; }
+ tr:hover td { background:var(--card); }
+ .t { max-width:46ch; }
+ .t a { color:var(--fg); text-decoration:none; border-bottom:1px solid var(--line); }
+ .t a:hover { border-color:currentColor; }
+ .s { color:var(--mut); font-size:12px; margin-top:2px; }
+ .p, .st, .d { color:var(--mut); font-size:12px; white-space:nowrap; }
+ .g { color:var(--mut); font-size:10.5px; font-family:ui-monospace,SFMono-Regular,monospace; }
+ .b { display:inline-block; font-size:10px; padding:1px 6px; border-radius:99px;
+   margin-left:6px; vertical-align:1px; white-space:nowrap; }
+ .ev { color:var(--ev); background:var(--evb); }
+ .ob { color:var(--ob); background:var(--obb); }
+ .gg { color:var(--gg); background:var(--ggb); }
+ footer { padding:24px 28px 60px; color:var(--mut); font-size:12.5px; max-width:80ch; }
+"""
+
+
+def report_categories(recs):
+    """(anchor, title, explanation, items) — the same grouping cmd_report prints,
+    ordered by how safe each group is to act on."""
+    dead = [r for r in recs if r.get("link") == "dead"]
+    return [
+        ("safest", "Мёртвые и устаревшие",
+         "Два независимых сигнала совпали: ссылка не отвечает и технология мертва. "
+         "Самая безопасная группа — удалять можно пачкой.",
+         [r for r in dead if r.get("obsolete") and not r.get("evergreen")]),
+        ("evergreen", "Мёртвые, но вечнозелёные",
+         "Ссылка умерла, ценность содержимого — нет. Грамматика, шпаргалки, основы. "
+         "Здесь правильнее найти замену, чем удалить.",
+         [r for r in dead if r.get("evergreen")]),
+        ("dead-rest", "Мёртвые, остальные",
+         "404, 410 или домен не резолвится, подтверждено GET-запросом после HEAD. "
+         "Разбирать по веткам.",
+         [r for r in dead if not r.get("obsolete") and not r.get("evergreen")]),
+        ("obsolete-alive", "Устаревшие, но ссылка живая",
+         "Страница открывается, но технология или повод устарели: мёртвый стек, "
+         "старые вакансии, снятые с продажи товары.",
+         [r for r in recs if r.get("obsolete") and r.get("link") != "dead"]),
+        ("suspect", "Подозрительные — проверить руками",
+         "403, 429, таймауты, битые сертификаты. Чаще всего живы и просто отшивают "
+         "ботов. На удаление не предлагаются никогда.",
+         [r for r in recs if r.get("link") == "suspect"]),
+        ("googlable", "Тривиально гуглится",
+         "Главные страницы известных инструментов — найдутся одним запросом. "
+         "Ценность закладки низкая, но проверь вечнозелёные.",
+         [r for r in recs if r.get("googlable") and not r.get("evergreen")
+          and r.get("link") != "dead"]),
+    ]
+
+
+def write_html_report(path=None):
+    """Browsable cleanup report: clickable titles, folder paths, guids for patches."""
+    import html as _html
+
+    path = os.path.expanduser(
+        path or config().get("report_path", "~/bookmarks-cleanup.html"))
+    recs = [r for r in read_index().values() if not r.get("missing_since")]
+    data, _ = load_tree()
+    th = thresholds()
+    thin = [f for f in folders(data) if is_thin(f, th)]
+
+    def esc(s):
+        return _html.escape(str(s or ""))
+
+    def path_of(r):
+        return " › ".join(r.get("path", [])[1:])
+
+    def rows(items):
+        out = []
+        for r in sorted(items, key=lambda x: (path_of(x), x.get("title", ""))):
+            badges = ""
+            if r.get("evergreen"):
+                badges += '<span class="b ev">вечнозелёная</span>'
+            if r.get("obsolete"):
+                badges += '<span class="b ob">устарело</span>'
+            if r.get("googlable"):
+                badges += '<span class="b gg">гуглится</span>'
+            out.append(
+                f'<tr><td class="t"><a href="{esc(r.get("url"))}" target="_blank" '
+                f'rel="noopener">{esc(r.get("title") or r.get("url"))[:110]}</a>{badges}'
+                f'<div class="s">{esc(r.get("summary", ""))}</div></td>'
+                f'<td class="p">{esc(path_of(r))}</td>'
+                f'<td class="st">{esc(r.get("link_status", ""))}</td>'
+                # empty dates sort last in both directions rather than clumping at the top
+                f'<td class="d" data-v="{esc(r.get("added") or "0000-00-00")}">'
+                f'{esc(r.get("added", ""))}</td>'
+                f'<td class="g">{esc(r.get("guid"))}</td></tr>')
+        return "\n".join(out)
+
+    def where(items, n=8):
+        c = {}
+        for r in items:
+            b = " › ".join(r.get("path", [])[1:3])
+            c[b] = c.get(b, 0) + 1
+        top = sorted(c.items(), key=lambda x: -x[1])[:n]
+        return " · ".join(f"{esc(b)} ({k})" for b, k in top)
+
+    cats = [(cid, name, blurb, items)
+            for cid, name, blurb, items in report_categories(recs) if items]
+
+    nav = "".join(f'<a href="#{cid}">{esc(name)} <b>{len(items)}</b></a>'
+                  for cid, name, _, items in cats)
+    nav += f'<a href="#thin">Тонкие папки <b>{len(thin)}</b></a>'
+
+    sections = []
+    for cid, name, blurb, items in cats:
+        sections.append(
+            f'<div class="tw"><section id="{cid}"><h2>{esc(name)} '
+            f'<span class="n">{len(items)}</span></h2>'
+            f'<p class="blurb">{esc(blurb)}</p><p class="where">{where(items)}</p>'
+            f'<table><thead><tr><th>Закладка</th><th>Папка</th><th>Статус</th>'
+            f'<th>Добавлена</th><th>guid</th></tr></thead>'
+            f'<tbody>{rows(items)}</tbody></table></section></div>')
+
+    thin_rows = "\n".join(
+        f'<tr><td class="p">{esc(" › ".join(f["path"][1:]))}</td>'
+        f'<td class="st">{f["n_urls"]} закладк{"а" if f["n_urls"] == 1 else "и"}</td>'
+        f'<td class="g">{esc(f["guid"])}</td></tr>'
+        for f in sorted(thin, key=lambda x: x["path"]))
+    sections.append(
+        f'<div class="tw"><section id="thin"><h2>Тонкие папки '
+        f'<span class="n">{len(thin)}</span></h2>'
+        f'<p class="blurb">Папка держит не больше {th["thin_folder_max"]} закладок и '
+        f'не имеет подпапок — лишний клик на пути к содержимому. Схлопывание в '
+        f'родителя уменьшает глубину.</p>'
+        f'<table><thead><tr><th>Путь</th><th>Содержимое</th><th>guid</th></tr></thead>'
+        f'<tbody>{thin_rows}</tbody></table></section></div>')
+
+    checked = len([r for r in recs if r.get("checked")])
+    dates = sorted(r["checked"] for r in recs if r.get("checked"))
+    span = f"{dates[0]} .. {dates[-1]}" if dates else "не проверялись"
+
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(f"""<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Закладки — кандидаты на уборку</title>
+<style>{REPORT_CSS}</style></head><body>
+<header><h1>Закладки — кандидаты на уборку</h1>
+<div class="meta">{len(recs)} закладок · проверено ссылок {checked} ({esc(span)}) ·
+ отчёт от {datetime.now():%Y-%m-%d %H:%M}</div></header>
+<nav>{nav}</nav>
+{"".join(sections)}
+<footer>
+<p><b>Прежде чем удалять.</b> Если у профиля включена синхронизация Chrome,
+удаление разъедется по всем устройствам, а локальный бэкап вернёт только эту
+машину. Безопасный порядок — поставить синхронизацию на паузу, закрыть Chrome,
+применить патч, проверить дерево, включить синхронизацию обратно.</p>
+<p>Колонка guid нужна для сборки патча: <code>bm.py apply patch.json</code>.
+Клик по заголовку столбца сортирует таблицу — например, по дате добавления,
+чтобы отделить давно забытое от недавнего. Ничего в этом отчёте не является
+решением — только материал для него.</p>
+</footer>
+<script>
+document.querySelectorAll('table').forEach(function (table) {{
+  table.querySelectorAll('th').forEach(function (th, col) {{
+    th.addEventListener('click', function () {{
+      var body = table.tBodies[0];
+      var desc = !th.classList.contains('desc');
+      table.querySelectorAll('th').forEach(function (o) {{
+        o.classList.remove('asc', 'desc');
+      }});
+      th.classList.add(desc ? 'desc' : 'asc');
+      var rows = Array.prototype.slice.call(body.rows);
+      rows.sort(function (a, b) {{
+        var x = a.cells[col], y = b.cells[col];
+        x = (x.dataset.v !== undefined ? x.dataset.v : x.textContent).trim();
+        y = (y.dataset.v !== undefined ? y.dataset.v : y.textContent).trim();
+        var n = x.localeCompare(y, 'ru', {{numeric: true}});
+        return desc ? -n : n;
+      }});
+      rows.forEach(function (r) {{ body.appendChild(r); }});
+    }});
+  }});
+}});
+</script>
+</body></html>""")
+    return path, len(recs), checked
+
 
 def cmd_report(args):
     """Cleanup candidates, grouped. Judgement stays with the model; this is evidence."""
     recs = read_index()
     data, _ = load_tree()
     sync_records(data, recs)
+
+    if args.html is not None:
+        path, total, checked = write_html_report(args.html or None)
+        print(f"{path}\n  {total} bookmarks, {checked} links checked")
+        for _, name, _, items in report_categories(
+                [r for r in recs.values() if not r.get("missing_since")]):
+            print(f"  {len(items):5}  {name}")
+        return
     cfg = config()
     th = thresholds()
     hot_days = th["hot_ttl_days"]
@@ -1673,10 +1901,14 @@ def main():
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--accept-dns-failures", action="store_true",
                    help="write the run even if many domains fail to resolve")
+    p.add_argument("--no-report", action="store_true",
+                   help="skip writing the HTML report afterwards")
     p.set_defaults(fn=cmd_check_links)
 
     p = sub.add_parser("report", help="cleanup candidates grouped by reason")
     p.add_argument("--limit", type=int, default=40)
+    p.add_argument("--html", nargs="?", const="", default=None, metavar="PATH",
+                   help="write the browsable HTML report instead of printing TSV")
     p.set_defaults(fn=cmd_report)
 
     p = sub.add_parser("apply", help="apply a patch file to Bookmarks")

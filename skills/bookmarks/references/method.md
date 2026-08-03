@@ -44,7 +44,16 @@ bookmark; that is what thin folders are made of.
 
 ## Audit
 
-`bm.py report` groups candidates by reason. Present them in descending order of safety:
+`bm.py check-links` writes a browsable HTML report when it finishes — clickable
+titles, folder paths, the enrichment summary under each entry, colour badges for
+evergreen/obsolete/googlable, and the guid column needed to build a delete patch.
+It lands at `report_path` from `config.json`, default `~/bookmarks-cleanup.html`.
+Give the user that path and let them read it; do not paginate hundreds of rows into
+the conversation. Rebuild it any time with `bm.py report --html [PATH]`, and suppress
+it during a sweep with `--no-report`.
+
+`bm.py report` without `--html` prints the same grouping as TSV, for when you need to
+reason over the rows yourself. Present them in descending order of safety:
 
 **Dead links** — 404, 410, or a domain that no longer resolves, confirmed by a GET
 after the HEAD. The `link_status` field records both (`HEAD 404 / GET 200` means the
