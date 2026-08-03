@@ -877,12 +877,14 @@ def cmd_check_links(args):
 REPORT_CSS = """
  :root { color-scheme: light dark;
    --bg:#fbfaf8; --fg:#1a1a1a; --mut:#6b6660; --line:#e2ded8; --card:#fff;
-   --ev:#0d7a5f; --evb:#dff3ec; --ob:#9a5b00; --obb:#fdefd8; --gg:#5a5f8a; --ggb:#e9eaf5; }
+   --ev:#0d7a5f; --evb:#dff3ec; --ob:#9a5b00; --obb:#fdefd8; --gg:#5a5f8a; --ggb:#e9eaf5;
+   --acc:#b03030; --accb:#fbeaea; }
  @media (prefers-color-scheme: dark) { :root {
    --bg:#141311; --fg:#eceae6; --mut:#94908a; --line:#2c2a27; --card:#1c1b19;
-   --ev:#5cd6b0; --evb:#12332a; --ob:#e0a44e; --obb:#3a2a10; --gg:#a8adda; --ggb:#22243a; } }
+   --ev:#5cd6b0; --evb:#12332a; --ob:#e0a44e; --obb:#3a2a10; --gg:#a8adda; --ggb:#22243a;
+   --acc:#ff8a8a; --accb:#37191a; } }
  * { box-sizing:border-box }
- body { margin:0; background:var(--bg); color:var(--fg);
+ body { margin:0 0 76px; background:var(--bg); color:var(--fg);
    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
  header { padding:32px 28px 20px; border-bottom:1px solid var(--line); }
  h1 { margin:0 0 6px; font-size:26px; letter-spacing:-.02em; }
@@ -894,8 +896,14 @@ REPORT_CSS = """
  nav a:hover { border-color:var(--mut); }
  nav a b { color:var(--mut); font-weight:600; margin-left:3px; }
  section { padding:30px 28px; border-bottom:1px solid var(--line); }
+ .head { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
  h2 { font-size:19px; margin:0 0 6px; letter-spacing:-.01em; }
  h2 .n { color:var(--mut); font-weight:400; }
+ .picked { color:var(--acc); font-weight:500; font-size:14px; }
+ .all { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--mut);
+   border:1px solid var(--line); background:var(--card); padding:5px 11px;
+   border-radius:99px; cursor:pointer; white-space:nowrap; }
+ .all:hover { border-color:var(--acc); color:var(--acc); }
  .blurb { margin:0 0 4px; color:var(--mut); max-width:70ch; font-size:14px; }
  .where { margin:0 0 16px; color:var(--mut); font-size:12px; max-width:110ch; }
  .tw { overflow-x:auto; }
@@ -907,8 +915,15 @@ REPORT_CSS = """
  th::after { content:"\\2195"; opacity:.28; margin-left:5px; font-size:10px; }
  th.asc::after { content:"\\2191"; opacity:1; }
  th.desc::after { content:"\\2193"; opacity:1; }
+ th.nosort { cursor:default; width:34px; }
+ th.nosort::after { content:""; }
  td { padding:9px 12px 9px 0; border-bottom:1px solid var(--line); vertical-align:top; }
  tr:hover td { background:var(--card); }
+ td.c { width:34px; padding-top:11px; }
+ input[type=checkbox] { width:15px; height:15px; accent-color:var(--acc); cursor:pointer; }
+ tr.marked td { background:var(--accb); }
+ tr.marked .t a { color:var(--acc); text-decoration:line-through; }
+ tr.marked .s, tr.marked .p { opacity:.55; }
  .t { max-width:46ch; }
  .t a { color:var(--fg); text-decoration:none; border-bottom:1px solid var(--line); }
  .t a:hover { border-color:currentColor; }
@@ -920,7 +935,146 @@ REPORT_CSS = """
  .ev { color:var(--ev); background:var(--evb); }
  .ob { color:var(--ob); background:var(--obb); }
  .gg { color:var(--gg); background:var(--ggb); }
- footer { padding:24px 28px 60px; color:var(--mut); font-size:12.5px; max-width:80ch; }
+ footer { padding:24px 28px; color:var(--mut); font-size:12.5px; max-width:80ch; }
+ #bar { position:fixed; left:0; right:0; bottom:0; z-index:20; display:flex;
+   align-items:center; gap:12px; padding:13px 28px; background:var(--card);
+   border-top:1px solid var(--line); box-shadow:0 -6px 22px rgba(0,0,0,.09);
+   transform:translateY(105%); transition:transform .18s ease; flex-wrap:wrap; }
+ #bar.on { transform:none; }
+ #bar .cnt { font-weight:600; }
+ #bar .cnt b { color:var(--acc); font-size:17px; }
+ #bar button { font:inherit; font-size:13px; padding:7px 14px; border-radius:8px;
+   border:1px solid var(--line); background:var(--bg); color:var(--fg); cursor:pointer; }
+ #bar button:hover { border-color:var(--mut); }
+ #bar button.pri { background:var(--acc); border-color:var(--acc); color:#fff; }
+ @media (prefers-color-scheme: dark) { #bar button.pri { color:#1a1a1a; } }
+ #bar .sp { flex:1 }
+ #bar .hint { color:var(--mut); font-size:12px; }
+"""
+
+REPORT_JS = r"""
+var KEY = 'bm-cleanup-marks';
+var marks = new Set(JSON.parse(localStorage.getItem(KEY) || '[]'));
+
+function save() { localStorage.setItem(KEY, JSON.stringify(Array.from(marks))); }
+function paintRow(cb) { cb.closest('tr').classList.toggle('marked', cb.checked); }
+
+function refresh() {
+  document.querySelectorAll('section[data-cat]').forEach(function (sec) {
+    var boxes = sec.querySelectorAll('.pick');
+    var on = sec.querySelectorAll('.pick:checked').length;
+    var all = sec.querySelector('.allbox');
+    if (all) {
+      all.checked = on > 0 && on === boxes.length;
+      all.indeterminate = on > 0 && on < boxes.length;
+    }
+    var tag = sec.querySelector('.picked');
+    if (tag) { tag.hidden = on === 0; tag.querySelector('b').textContent = on; }
+  });
+  document.getElementById('bar').classList.toggle('on', marks.size > 0);
+  document.getElementById('cnt').textContent = marks.size;
+  save();
+}
+
+document.querySelectorAll('.pick').forEach(function (cb) {
+  if (marks.has(cb.dataset.guid)) cb.checked = true;
+  paintRow(cb);
+  cb.addEventListener('change', function () {
+    if (cb.checked) marks.add(cb.dataset.guid); else marks.delete(cb.dataset.guid);
+    paintRow(cb); refresh();
+  });
+});
+
+document.querySelectorAll('.allbox').forEach(function (all) {
+  all.addEventListener('change', function () {
+    all.closest('section').querySelectorAll('.pick').forEach(function (cb) {
+      if (cb.checked === all.checked) return;
+      cb.checked = all.checked;
+      if (cb.checked) marks.add(cb.dataset.guid); else marks.delete(cb.dataset.guid);
+      paintRow(cb);
+    });
+    refresh();
+  });
+});
+
+document.querySelectorAll('table').forEach(function (table) {
+  table.querySelectorAll('th').forEach(function (th, col) {
+    if (th.classList.contains('nosort')) return;
+    th.addEventListener('click', function () {
+      var body = table.tBodies[0];
+      var desc = !th.classList.contains('desc');
+      table.querySelectorAll('th').forEach(function (o) { o.classList.remove('asc','desc'); });
+      th.classList.add(desc ? 'desc' : 'asc');
+      var rs = Array.prototype.slice.call(body.rows);
+      rs.sort(function (a, b) {
+        var x = a.cells[col], y = b.cells[col];
+        x = (x.dataset.v !== undefined ? x.dataset.v : x.textContent).trim();
+        y = (y.dataset.v !== undefined ? y.dataset.v : y.textContent).trim();
+        var n = x.localeCompare(y, 'ru', {numeric: true});
+        return desc ? -n : n;
+      });
+      rs.forEach(function (r) { body.appendChild(r); });
+    });
+  });
+});
+
+// The patch must be reviewable by whoever applies it, not just machine-valid:
+// title, path and category travel with each op so a wrong selection is visible
+// before the write. bm.py's apply reads only op/guid and ignores the rest.
+function buildPatch() {
+  var ops = [];
+  marks.forEach(function (g) {
+    var tr = document.querySelector('tr[data-guid="' + g + '"]');
+    var op = {op: 'delete', guid: g};
+    if (tr) {
+      op.title = tr.querySelector('.t a').textContent.trim();
+      op.path = tr.querySelector('.p').textContent.trim();
+      op.category = tr.closest('section').querySelector('h2').firstChild.textContent.trim();
+    }
+    ops.push(op);
+  });
+  ops.sort(function (a, b) { return (a.path || '').localeCompare(b.path || '', 'ru'); });
+  return {
+    generated: new Date().toISOString().slice(0, 16).replace('T', ' '),
+    source: 'bookmarks-cleanup report',
+    count: ops.length,
+    ops: ops
+  };
+}
+
+document.getElementById('only').addEventListener('click', function () {
+  var on = document.body.classList.toggle('onlymarked');
+  this.textContent = on ? 'Показать все' : 'Только отмеченные';
+  document.querySelectorAll('tr[data-guid]').forEach(function (tr) {
+    tr.style.display = (on && !tr.classList.contains('marked')) ? 'none' : '';
+  });
+});
+
+document.getElementById('clear').addEventListener('click', function () {
+  if (!confirm('Снять все ' + marks.size + ' отметок?')) return;
+  marks.clear();
+  document.querySelectorAll('.pick').forEach(function (cb) { cb.checked = false; paintRow(cb); });
+  refresh();
+});
+
+document.getElementById('patch').addEventListener('click', function () {
+  var blob = new Blob([JSON.stringify(buildPatch(), null, 2)], {type: 'application/json'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'bookmarks-delete-patch.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+document.getElementById('copy').addEventListener('click', function () {
+  var self = this;
+  navigator.clipboard.writeText(JSON.stringify(buildPatch(), null, 2)).then(function () {
+    self.textContent = 'Скопировано';
+    setTimeout(function () { self.textContent = 'Скопировать патч'; }, 1400);
+  });
+});
+
+refresh();
 """
 
 
@@ -984,16 +1138,18 @@ def write_html_report(path=None):
                 badges += '<span class="b ob">устарело</span>'
             if r.get("googlable"):
                 badges += '<span class="b gg">гуглится</span>'
+            guid = esc(r.get("guid"))
             out.append(
-                f'<tr><td class="t"><a href="{esc(r.get("url"))}" target="_blank" '
+                f'<tr data-guid="{guid}">'
+                f'<td class="c"><input type="checkbox" class="pick" data-guid="{guid}"></td>'
+                f'<td class="t"><a href="{esc(r.get("url"))}" target="_blank" '
                 f'rel="noopener">{esc(r.get("title") or r.get("url"))[:110]}</a>{badges}'
                 f'<div class="s">{esc(r.get("summary", ""))}</div></td>'
                 f'<td class="p">{esc(path_of(r))}</td>'
                 f'<td class="st">{esc(r.get("link_status", ""))}</td>'
                 # empty dates sort last in both directions rather than clumping at the top
                 f'<td class="d" data-v="{esc(r.get("added") or "0000-00-00")}">'
-                f'{esc(r.get("added", ""))}</td>'
-                f'<td class="g">{esc(r.get("guid"))}</td></tr>')
+                f'{esc(r.get("added", ""))}</td></tr>')
         return "\n".join(out)
 
     def where(items, n=8):
@@ -1014,12 +1170,15 @@ def write_html_report(path=None):
     sections = []
     for cid, name, blurb, items in cats:
         sections.append(
-            f'<div class="tw"><section id="{cid}"><h2>{esc(name)} '
-            f'<span class="n">{len(items)}</span></h2>'
+            f'<section id="{cid}" data-cat="{cid}"><div class="head">'
+            f'<label class="all"><input type="checkbox" class="allbox">'
+            f'<span>отметить группу</span></label>'
+            f'<h2>{esc(name)} <span class="n">{len(items)}</span>'
+            f'<span class="picked" hidden>· отмечено <b>0</b></span></h2></div>'
             f'<p class="blurb">{esc(blurb)}</p><p class="where">{where(items)}</p>'
-            f'<table><thead><tr><th>Закладка</th><th>Папка</th><th>Статус</th>'
-            f'<th>Добавлена</th><th>guid</th></tr></thead>'
-            f'<tbody>{rows(items)}</tbody></table></section></div>')
+            f'<div class="tw"><table><thead><tr><th class="nosort"></th>'
+            f'<th>Закладка</th><th>Папка</th><th>Статус</th><th>Добавлена</th></tr></thead>'
+            f'<tbody>{rows(items)}</tbody></table></div></section>')
 
     thin_rows = "\n".join(
         f'<tr><td class="p">{esc(" › ".join(f["path"][1:]))}</td>'
@@ -1027,13 +1186,15 @@ def write_html_report(path=None):
         f'<td class="g">{esc(f["guid"])}</td></tr>'
         for f in sorted(thin, key=lambda x: x["path"]))
     sections.append(
-        f'<div class="tw"><section id="thin"><h2>Тонкие папки '
-        f'<span class="n">{len(thin)}</span></h2>'
+        f'<section id="thin"><div class="head"><h2>Тонкие папки '
+        f'<span class="n">{len(thin)}</span></h2></div>'
         f'<p class="blurb">Папка держит не больше {th["thin_folder_max"]} закладок и '
         f'не имеет подпапок — лишний клик на пути к содержимому. Схлопывание в '
-        f'родителя уменьшает глубину.</p>'
-        f'<table><thead><tr><th>Путь</th><th>Содержимое</th><th>guid</th></tr></thead>'
-        f'<tbody>{thin_rows}</tbody></table></section></div>')
+        f'родителя уменьшает глубину. Отметок тут нет: это не удаление, а '
+        f'перестройка.</p>'
+        f'<div class="tw"><table><thead><tr><th>Путь</th><th>Содержимое</th>'
+        f'<th>guid</th></tr></thead>'
+        f'<tbody>{thin_rows}</tbody></table></div></section>')
 
     checked = len([r for r in recs if r.get("checked")])
     dates = sorted(r["checked"] for r in recs if r.get("checked"))
@@ -1051,38 +1212,29 @@ def write_html_report(path=None):
 <nav>{nav}</nav>
 {"".join(sections)}
 <footer>
+<p><b>Как пользоваться.</b> Галочка = «удалить», снятая = «оставить». Чекбокс у
+заголовка отмечает всю группу разом. Клик по заголовку столбца сортирует таблицу —
+например, по дате добавления, чтобы отделить давно забытое от недавнего. Выбор
+сохраняется в браузере, можно закрыть вкладку и вернуться к нему позже.</p>
+<p>Когда закончишь — «Скачать патч». Файл ляжет в
+<code>~/Downloads/bookmarks-delete-patch.json</code>. В каждой операции есть
+заголовок, папка и категория, так что перед применением видно, что именно уйдёт.
+Применяется через <code>bm.py apply</code>.</p>
 <p><b>Прежде чем удалять.</b> Если у профиля включена синхронизация Chrome,
 удаление разъедется по всем устройствам, а локальный бэкап вернёт только эту
 машину. Безопасный порядок — поставить синхронизацию на паузу, закрыть Chrome,
 применить патч, проверить дерево, включить синхронизацию обратно.</p>
-<p>Колонка guid нужна для сборки патча: <code>bm.py apply patch.json</code>.
-Клик по заголовку столбца сортирует таблицу — например, по дате добавления,
-чтобы отделить давно забытое от недавнего. Ничего в этом отчёте не является
-решением — только материал для него.</p>
 </footer>
-<script>
-document.querySelectorAll('table').forEach(function (table) {{
-  table.querySelectorAll('th').forEach(function (th, col) {{
-    th.addEventListener('click', function () {{
-      var body = table.tBodies[0];
-      var desc = !th.classList.contains('desc');
-      table.querySelectorAll('th').forEach(function (o) {{
-        o.classList.remove('asc', 'desc');
-      }});
-      th.classList.add(desc ? 'desc' : 'asc');
-      var rows = Array.prototype.slice.call(body.rows);
-      rows.sort(function (a, b) {{
-        var x = a.cells[col], y = b.cells[col];
-        x = (x.dataset.v !== undefined ? x.dataset.v : x.textContent).trim();
-        y = (y.dataset.v !== undefined ? y.dataset.v : y.textContent).trim();
-        var n = x.localeCompare(y, 'ru', {{numeric: true}});
-        return desc ? -n : n;
-      }});
-      rows.forEach(function (r) {{ body.appendChild(r); }});
-    }});
-  }});
-}});
-</script>
+<div id="bar">
+  <span class="cnt">отмечено на удаление: <b id="cnt">0</b></span>
+  <button id="only">Только отмеченные</button>
+  <button id="copy">Скопировать патч</button>
+  <span class="sp"></span>
+  <span class="hint">файл падает в ~/Downloads — скажи, и я его прочитаю</span>
+  <button id="clear">Снять всё</button>
+  <button id="patch" class="pri">Скачать патч</button>
+</div>
+<script>{REPORT_JS}</script>
 </body></html>""")
     return path, len(recs), checked
 

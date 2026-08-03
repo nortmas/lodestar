@@ -101,11 +101,14 @@ costs the user something real — check before doing either.
 
 ### Audit
 
-`bm.py check-links` runs the HTTP sweep, caches results in the index, and writes a
-browsable HTML report the user can actually work from — categories ranked by how safe
-they are to act on, clickable titles, folder paths and guids. Hand over the path
-rather than pasting rows into the conversation. `bm.py report --html` rebuilds it,
-`bm.py report` prints the same grouping as TSV, `bm.py stats` gives folder health.
+`bm.py check-links` runs the HTTP sweep, caches results in the index, and writes an
+**interactive** HTML report — categories ranked by how safe they are to act on, with
+a checkbox per row and one per category that marks the whole group for deletion.
+Hand over the path rather than pasting rows into the conversation; the user decides
+in the report and exports a patch from it, which you then read back, summarize and
+apply. The round trip is described in `references/method.md` — do not skip the
+summarize step. `bm.py report --html` rebuilds it, `bm.py report` prints the same
+grouping as TSV, `bm.py stats` gives folder health.
 
 Report findings, ranked by how safe each group is to act on. Deletion is only ever
 proposed, never performed silently. See `references/method.md` for what qualifies as

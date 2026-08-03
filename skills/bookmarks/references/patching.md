@@ -18,6 +18,11 @@ Every write goes through a patch file. Nothing edits the Bookmarks JSON directly
 Operations run in order. `move`, `rename` and `delete` work on folders and bookmarks
 alike — a folder guid moves the whole subtree.
 
+Unknown keys on an op are ignored, which is deliberate: patches exported from the
+cleanup report carry `title`, `path` and `category` alongside each `guid` so a human
+or a model can see what a patch does without resolving identifiers. Keep that habit
+when you author a patch by hand — a delete list of bare guids is unreviewable.
+
 Targets take `to_guid` (preferred) or `to_path` as an array starting with the root key:
 `["bookmark_bar", "Work", "DevOps"]`. Use `to_guid` wherever possible — folder names
 can contain `/` and other separators, and an array avoids the ambiguity entirely.

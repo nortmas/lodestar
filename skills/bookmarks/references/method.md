@@ -44,13 +44,40 @@ bookmark; that is what thin folders are made of.
 
 ## Audit
 
-`bm.py check-links` writes a browsable HTML report when it finishes — clickable
-titles, folder paths, the enrichment summary under each entry, colour badges for
-evergreen/obsolete/googlable, and the guid column needed to build a delete patch.
-It lands at `report_path` from `config.json`, default `~/bookmarks-cleanup.html`.
-Give the user that path and let them read it; do not paginate hundreds of rows into
-the conversation. Rebuild it any time with `bm.py report --html [PATH]`, and suppress
-it during a sweep with `--no-report`.
+`bm.py check-links` writes an **interactive** HTML report when it finishes, and this
+is the main way the user makes cleanup decisions. It lands at `report_path` from
+`config.json`, default `~/bookmarks-cleanup.html`. Rebuild it any time with
+`bm.py report --html [PATH]`; suppress it during a sweep with `--no-report`.
+
+The report has clickable titles, folder paths, the enrichment summary under each
+entry, badges for evergreen/obsolete/googlable so conflicting signals are visible,
+sortable columns, and a checkbox on every row plus one per category that marks the
+whole group. A ticked box means **delete**; unticked means keep. Marks persist in the
+browser's localStorage, so the user can review across sessions.
+
+**Give the user the path and let them work.** Do not paginate hundreds of rows into
+the conversation — the report exists precisely so that does not have to happen.
+
+### Reading their decisions back
+
+The report's "Скачать патч" button writes `~/Downloads/bookmarks-delete-patch.json`.
+It is directly applicable, and each op also carries `title`, `path` and `category`,
+which `bm.py apply` ignores and you must not.
+
+When the user says they have marked things:
+
+1. Read the file. If it is missing, ask — they may have used "Скопировать патч" and
+   will paste it instead.
+2. **Summarize what it actually contains before touching anything**: how many
+   deletions, which branches they fall in, and anything that looks like a mistake —
+   an evergreen entry among the deletions, a whole category ticked where the
+   category was one you flagged as needing judgement, a branch losing far more than
+   the rest.
+3. `bm.py apply <file> --dry-run`, show the action list, get explicit approval.
+4. Then the normal write procedure, including the sync warning.
+
+Never apply a patch from the report without step 2. A ticked checkbox is a decision
+made while scrolling; your job is to make its consequences visible before the write.
 
 `bm.py report` without `--html` prints the same grouping as TSV, for when you need to
 reason over the rows yourself. Present them in descending order of safety:
