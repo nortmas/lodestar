@@ -23,6 +23,7 @@ All skills are invoked as `/lodestar:<skill>`.
 | clickup-tasks | `/lodestar:clickup-tasks` | Draft and create ClickUp tasks to board convention |
 | clickup-comments | `/lodestar:clickup-comments` | Draft and post ClickUp comments in plain English |
 | pm-report | `/lodestar:pm-report` | Plain-language, non-technical session report for a PM |
+| explain | `/lodestar:explain` | Developer-facing walkthrough of a change, mechanism, bug, task, decision or concept, on one concrete example |
 
 ## Install
 

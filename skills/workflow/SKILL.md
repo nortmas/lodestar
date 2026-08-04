@@ -178,7 +178,7 @@ recommended. User picks. Record the chosen approach in the plan file.
 1. **Propose — never perform unprompted — documentation updates**, and only when
    an update is genuinely warranted (a README, a doc the change makes stale, a
    discovered spec). State exactly what would change and ask first.
-2. Offer `/lodestar:pm-report` for a plain-language summary of the session.
+2. Offer `/lodestar:explain` for a walkthrough of what was built and why it works.
 3. Ask whether to **delete or keep** `.workflow/plan-<slug>.md`.
 
 ## Batch mode with subagents
@@ -253,4 +253,5 @@ them silently:
   for robustness and better patterns.
 - **`lodestar:check-rules`** — verify the diff against `.claude/rules/` when the project
   has them (Phase 5).
-- **`lodestar:pm-report`** — plain-language session summary at wrap-up (Phase 6).
+- **`lodestar:explain`** — walk the developer through what was built and why it works,
+  at wrap-up (Phase 6).
