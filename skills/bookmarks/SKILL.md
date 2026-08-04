@@ -6,8 +6,6 @@ disable-model-invocation: true
 
 # Bookmarks
 
-Runs only when explicitly invoked as `/lodestar:bookmarks` — never auto-triggered.
-
 Chrome stores bookmarks as a single JSON file. This skill reads it directly, keeps
 a searchable sidecar index next to it, and writes back only through reviewed patches.
 
