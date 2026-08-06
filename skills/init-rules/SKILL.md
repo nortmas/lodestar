@@ -2,6 +2,7 @@
 name: init-rules
 description: Generate project-specific coding-standard rules at .claude/rules/ by analyzing the existing codebase and balancing it against best practices. Use this whenever the user wants to bootstrap, (re)generate, or refresh Claude Code rules for a project, mentions "project rules", "coding standards", "CLAUDE rules", ".claude/rules", "onboard this repo", or asks Claude to learn/codify how this codebase does things. Prefer this skill even if the user does not say the word "rules" but describes wanting Claude to follow their project's conventions.
 allowed-tools: Read, Grep, Glob, Bash, Write, Edit, WebSearch, WebFetch
+disable-model-invocation: true
 ---
 
 # lodestar:init-rules
@@ -118,9 +119,11 @@ over time). If it is not present, say nothing about it — do not suggest instal
 generates audit-clean rules; it does not replace a periodic dedicated audit, but never
 reimplement one here.
 
-**Check for `lodestar:audit-rules` before mentioning it:** confirm it exists in the available-skills list
-for this session, or that `.claude/skills/lodestar/skills/audit-rules/` (project) or `~/.claude/skills/lodestar/skills/audit-rules/`
-(user) is present. No hit → no mention.
+**Check for `lodestar:audit-rules` before mentioning it:** check the filesystem, not the
+available-skills list — `audit-rules` sets `disable-model-invocation: true`, so it never appears
+in that listing even when installed. Confirm `.claude/skills/lodestar/skills/audit-rules/` (project)
+or `~/.claude/skills/lodestar/skills/audit-rules/` (user) is present. No hit → no mention.
+When it is present, recommend it as a command for the user to run — you cannot invoke it yourself.
 
 ## Internet fallback (only when the balance policy calls for it)
 

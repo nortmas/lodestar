@@ -1,6 +1,7 @@
 ---
 name: pm-report
 description: Use when the user says "report for PM", "PM report", "report for the PM", "summary for PM", "summarize for PM", "give me a PM summary", "plain English session report", "Bericht für PM", "PM-Bericht", or any near-equivalent — wants a non-technical session summary for the project manager. Produces a chat-only adaptive report covering what shipped, how to find it, how to verify, and outstanding items. Always reviews the whole session, not just the latest task. Never writes to a file.
+disable-model-invocation: true
 ---
 
 # PM Report

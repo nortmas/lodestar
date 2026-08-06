@@ -1,6 +1,7 @@
 ---
 name: audit-rules
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
+disable-model-invocation: true
 description: Audits project rules in .claude/rules/ for clarity, conciseness, structural compliance, and cross-rule integrity. Produces a markdown report with prioritized findings and per-rule rewrite proposals. Use when asked to audit rules, check rule quality, find rule gaps, lint a rule, review .claude/rules, or improve rule wording. Triggers on '/lodestar:audit-rules' or when user asks to check, audit, lint, or improve project rules.
 ---
 
