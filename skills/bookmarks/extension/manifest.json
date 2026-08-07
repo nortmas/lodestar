@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "Bookmark Agent Bridge",
+  "version": "1.0",
+  "description": "Executes bookmark operations sent by the local bm.py bridge over a localhost WebSocket. No data leaves the machine.",
+  "permissions": ["bookmarks"],
+  "background": { "service_worker": "background.js" }
+}

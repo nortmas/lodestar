@@ -24,6 +24,7 @@ import sqlite3
 import socket
 import subprocess
 import sys
+import threading
 import time
 import typing
 import unicodedata
@@ -108,8 +109,29 @@ def bookmarks_path():
     return os.path.join(base, profile, "Bookmarks")
 
 
+def account_bookmarks_path():
+    """A signed-in Chrome keeps the live tree in AccountBookmarks; the classic
+    Bookmarks file is then the device-only store and is usually empty. Return the
+    account store only when it exists and actually holds bookmarks."""
+    acct = os.path.join(os.path.dirname(bookmarks_path()), "AccountBookmarks")
+    if os.path.exists(acct):
+        try:
+            with open(acct, encoding="utf-8") as fh:
+                d = json.load(fh)
+            if any((d.get("roots", {}).get(k) or {}).get("children") for k in ROOTS):
+                return acct
+        except (OSError, ValueError, KeyError):
+            pass
+    return None
+
+
+def bookmarks_read_path():
+    """Where the bookmarks actually are, for reading. Prefer the account store."""
+    return account_bookmarks_path() or bookmarks_path()
+
+
 def load_tree():
-    p = bookmarks_path()
+    p = bookmarks_read_path()
     if not os.path.exists(p):
         die(f"Bookmarks file not found: {p}")
     with open(p, encoding="utf-8") as fh:
@@ -1726,11 +1748,31 @@ def diagnose_mismatch(ops, per_op):
 
 
 def cmd_apply(args):
-    with open(args.patch, encoding="utf-8") as fh:
-        payload = json.load(fh)
+    if not os.path.exists(args.patch):
+        die(f"patch file not found: {args.patch}\n"
+            f"  If it came from the cleanup report, the marks are still in the "
+            f"browser — reopen the report and press «Скачать патч» again.")
+    try:
+        with open(args.patch, encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except json.JSONDecodeError as exc:
+        die(f"{args.patch} is not valid JSON: {exc}")
     ops = payload["ops"] if isinstance(payload, dict) else payload
     if not isinstance(ops, list):
         die("patch must be a list of ops, or an object with an 'ops' list")
+
+    # Editing the file only works for a device-local profile. When Chrome stores
+    # bookmarks in the account, the server owns the tree and overwrites any file
+    # edit on the next merge — the exact failure that lost an evening. Route writes
+    # through the extension instead.
+    if account_bookmarks_path() and not args.force_file:
+        die("this profile stores bookmarks in your Google account, so editing the "
+            "file will be undone by sync.\n"
+            "  Apply changes through the extension instead:\n"
+            "    1. bm.py bridge         (starts the local relay)\n"
+            "    2. load the extension in chrome://extensions if not already\n"
+            "    3. bm.py apply-live <patch>\n"
+            "  (--force-file overrides, but the change will not stick under sync.)")
 
     data, path = load_tree()
     before = count_nodes(data)
@@ -1973,6 +2015,306 @@ def cmd_save(args):
     print("pulled, rebased and pushed")
 
 
+# ---------------------------------------------------------------- extension bridge
+#
+# Writes to a synced, account-backed Chrome MUST go through Chrome's own
+# bookmarks API, not through the file — the file is not the source of truth and
+# the server will overwrite external edits. The bridge is a localhost relay:
+#   bm.py call  --(HTTP)-->  bm.py bridge  --(WebSocket)-->  extension  --> chrome.bookmarks
+# The agent is the brain; the extension only executes what it is told and reports
+# back. Nothing listens beyond 127.0.0.1.
+
+_WS_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+_ext_sock = None                 # live socket to the extension, set on connect
+_ext_lock = threading.Lock()
+_pending = {}                    # request id -> response Queue
+
+
+def _ws_send(sock, data: bytes):
+    import struct
+    header = bytearray([0x81])
+    n = len(data)
+    if n < 126:
+        header.append(n)
+    elif n < 65536:
+        header.append(126)
+        header += struct.pack(">H", n)
+    else:
+        header.append(127)
+        header += struct.pack(">Q", n)
+    sock.sendall(bytes(header) + data)
+
+
+def _ws_recv(sock):
+    """One frame. Returns payload bytes, b'' for a control frame handled here,
+    or None on close/EOF."""
+    import struct
+
+    def readn(n):
+        buf = b""
+        while len(buf) < n:
+            c = sock.recv(n - len(buf))
+            if not c:
+                return None
+            buf += c
+        return buf
+
+    h = readn(2)
+    if not h:
+        return None
+    opcode = h[0] & 0x0F
+    masked = h[1] & 0x80
+    ln = h[1] & 0x7F
+    if ln == 126:
+        ext = readn(2)
+        if ext is None:
+            return None
+        ln = struct.unpack(">H", ext)[0]
+    elif ln == 127:
+        ext = readn(8)
+        if ext is None:
+            return None
+        ln = struct.unpack(">Q", ext)[0]
+    mask = readn(4) if masked else b""
+    if mask is None:
+        return None
+    payload = readn(ln) if ln else b""
+    if payload is None:
+        return None
+    if masked:
+        payload = bytes(payload[i] ^ mask[i % 4] for i in range(len(payload)))
+    if opcode == 0x8:            # close
+        return None
+    if opcode == 0x9:            # ping -> pong
+        sock.sendall(bytes([0x8A, len(payload)]) + payload)
+        return b""
+    return payload
+
+
+def cmd_bridge(args):
+    import base64
+    import hashlib
+    import queue
+    import uuid
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    global _ext_sock
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, format, *args):  # noqa: A002 - match base signature
+            pass
+
+        def do_GET(self):
+            global _ext_sock
+            if self.headers.get("Upgrade", "").lower() != "websocket":
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"bookmark bridge up")
+                return
+            key = self.headers.get("Sec-WebSocket-Key", "")
+            accept = base64.b64encode(
+                hashlib.sha1((key + _WS_MAGIC).encode()).digest()).decode()
+            self.send_response(101)
+            self.send_header("Upgrade", "websocket")
+            self.send_header("Connection", "Upgrade")
+            self.send_header("Sec-WebSocket-Accept", accept)
+            self.end_headers()
+            self.close_connection = True
+            sock = self.connection
+            with _ext_lock:
+                _ext_sock = sock
+            print("extension connected", file=sys.stderr)
+            try:
+                while True:
+                    msg = _ws_recv(sock)
+                    if msg is None:
+                        break
+                    if not msg:
+                        continue
+                    data = json.loads(msg.decode("utf-8"))
+                    q = _pending.get(data.get("id"))
+                    if q:
+                        q.put(data)
+            except OSError:
+                pass
+            finally:
+                with _ext_lock:
+                    if _ext_sock is sock:
+                        _ext_sock = None
+                print("extension disconnected", file=sys.stderr)
+
+        def do_POST(self):
+            n = int(self.headers.get("Content-Length", 0))
+            try:
+                body = json.loads(self.rfile.read(n) or b"{}")
+            except json.JSONDecodeError as exc:
+                return self._json({"error": f"bad json: {exc}"})
+            rid = uuid.uuid4().hex
+            q = queue.Queue()
+            _pending[rid] = q
+            with _ext_lock:
+                sock = _ext_sock
+            if sock is None:
+                _pending.pop(rid, None)
+                return self._json({"error": "extension not connected"})
+            try:
+                _ws_send(sock, json.dumps({"id": rid, **body}).encode("utf-8"))
+            except OSError:
+                _pending.pop(rid, None)
+                return self._json({"error": "extension socket dead"})
+            try:
+                resp = q.get(timeout=args.timeout)
+            except queue.Empty:
+                resp = {"error": "timeout waiting for extension"}
+            _pending.pop(rid, None)
+            self._json(resp)
+
+        def _json(self, obj):
+            b = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            self.wfile.write(b)
+
+    srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    print(f"bridge listening on 127.0.0.1:{args.port}", file=sys.stderr)
+    print("load/enable the extension now; it will connect automatically",
+          file=sys.stderr)
+    srv.serve_forever()
+
+
+def cmd_call(args):
+    import http.client
+    payload = args.json if args.json else json.dumps(
+        {"cmd": args.cmd, "args": json.loads(args.args)} if args.args
+        else {"cmd": args.cmd})
+    conn = http.client.HTTPConnection("127.0.0.1", args.port, timeout=args.timeout + 5)
+    conn.request("POST", "/call", payload,
+                 {"Content-Type": "application/json"})
+    resp = conn.getresponse().read().decode("utf-8")
+    conn.close()
+    print(resp)
+
+
+def _bridge_call(port, cmd, cargs=None, timeout=60):
+    """Send one command to the extension via the bridge; return its parsed reply."""
+    import http.client
+    body = json.dumps({"cmd": cmd, "args": cargs or {}})
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout + 5)
+        conn.request("POST", "/call", body, {"Content-Type": "application/json"})
+        resp = json.loads(conn.getresponse().read().decode("utf-8"))
+        conn.close()
+    except OSError as exc:
+        die(f"cannot reach the bridge on 127.0.0.1:{port} ({exc}). "
+            f"Start it with: bm.py bridge")
+    if isinstance(resp, dict) and resp.get("error"):
+        die(f"extension error: {resp['error']}")
+    return resp
+
+
+def _flatten_live(tree):
+    """chrome.bookmarks tree -> (url -> [node ids], node id -> {title,path})."""
+    by_url, info = {}, {}
+
+    def walk(nodes, path):
+        for n in nodes:
+            if n.get("url"):
+                by_url.setdefault(n["url"], []).append(n["id"])
+                info[n["id"]] = {"title": n.get("title", ""), "path": path}
+            if n.get("children"):
+                walk(n["children"], path + " › " + (n.get("title") or ""))
+    walk(tree, "")
+    return by_url, info
+
+
+def cmd_apply_live(args):
+    """Apply a delete patch through the running extension, so changes go through
+    Chrome's own API and survive sync. Ops are matched to live nodes by URL,
+    resolved from the index by guid — chrome.bookmarks node ids are not the guids
+    the report emits."""
+    with open(args.patch, encoding="utf-8") as fh:
+        payload = json.load(fh)
+    ops = payload["ops"] if isinstance(payload, dict) else payload
+    deletes = [o for o in ops if o.get("op") == "delete"]
+    other = [o for o in ops if o.get("op") != "delete"]
+    if other:
+        print(f"note: {len(other)} non-delete ops ignored — apply-live handles "
+              f"deletes only for now", file=sys.stderr)
+    if not deletes:
+        die("no delete ops in the patch")
+
+    recs = read_index()
+    tree = _bridge_call(args.port, "tree")
+    by_url, info = _flatten_live(tree)
+
+    resolved, missing_url, not_live = [], [], []
+    for o in deletes:
+        rec = recs.get(o.get("guid"))
+        url = (rec or {}).get("url") or o.get("url")
+        if not url:
+            missing_url.append(o)
+            continue
+        ids = by_url.get(url) or by_url.get(url.rstrip("/")) or []
+        if not ids:
+            not_live.append((o, url))
+            continue
+        for nid in ids:
+            resolved.append((nid, url, o))
+
+    dupes = sum(1 for u in {r[1] for r in resolved} if len(by_url.get(u, [])) > 1)
+    print(f"patch deletes         : {len(deletes)}")
+    print(f"resolved to live nodes: {len(resolved)}")
+    if dupes:
+        print(f"  ({dupes} of these URLs exist more than once live — every copy "
+              f"will be removed)")
+    if missing_url:
+        print(f"no url in index/patch : {len(missing_url)} (skipped)")
+    if not_live:
+        print(f"not present in Chrome : {len(not_live)} (already gone; skipped)")
+
+    from collections import Counter
+    br = Counter((info.get(nid, {}).get("path", "") or "").split(" › ")[1:3]
+                 and " › ".join((info.get(nid, {}).get("path", "")).split(" › ")[1:3])
+                 for nid, _, _ in resolved)
+    print("\nby branch:")
+    for b, c in br.most_common(12):
+        print(f"  {c:5}  {b}")
+
+    if not args.go:
+        print(f"\npreview only — nothing removed. Re-run with --go to delete "
+              f"{len(resolved)} nodes through Chrome.")
+        return
+
+    backup_account_store("before apply-live")
+    done = errors = 0
+    for nid, _, _ in resolved:
+        r = _bridge_call(args.port, "remove", {"id": nid})
+        if isinstance(r, dict) and r.get("error"):
+            errors += 1
+        else:
+            done += 1
+        if done % 50 == 0:
+            print(f"  removed {done}/{len(resolved)}", file=sys.stderr)
+    print(f"\nremoved {done} nodes через Chrome"
+          + (f", {errors} errors" if errors else "")
+          + ". Sync will carry the deletions to the account and other devices.")
+
+
+def backup_account_store(reason):
+    """Copy the live account store aside before a live mutation."""
+    acct = account_bookmarks_path()
+    if not acct:
+        return None
+    os.makedirs(BACKUPS, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    dest = os.path.join(BACKUPS, f"AccountBookmarks.{stamp}")
+    shutil.copy2(acct, dest)
+    print(f"backup: {dest}", file=sys.stderr)
+    return dest
+
+
 def cmd_status(args):
     recs = read_index()
     enriched = len([r for r in recs.values() if r.get("tags")])
@@ -2009,6 +2351,19 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("status", help="paths and readiness").set_defaults(fn=cmd_status)
+
+    p = sub.add_parser("bridge", help="run the localhost relay for the Chrome extension")
+    p.add_argument("--port", type=int, default=8787)
+    p.add_argument("--timeout", type=int, default=60)
+    p.set_defaults(fn=cmd_bridge)
+
+    p = sub.add_parser("call", help="send one command to the extension via the bridge")
+    p.add_argument("cmd", nargs="?", help="command name, e.g. ping / tree / remove")
+    p.add_argument("--args", help="JSON object of arguments")
+    p.add_argument("--json", help="full request JSON (overrides cmd/--args)")
+    p.add_argument("--port", type=int, default=8787)
+    p.add_argument("--timeout", type=int, default=60)
+    p.set_defaults(fn=cmd_call)
     sub.add_parser("stats", help="tree size and health metrics").set_defaults(fn=cmd_stats)
     sub.add_parser("profile-scan",
                    help="evidence pack for the setup interview").set_defaults(fn=cmd_profile_scan)
@@ -2063,10 +2418,20 @@ def main():
                    help="write the browsable HTML report instead of printing TSV")
     p.set_defaults(fn=cmd_report)
 
-    p = sub.add_parser("apply", help="apply a patch file to Bookmarks")
+    p = sub.add_parser("apply", help="apply a patch file to the Bookmarks file")
     p.add_argument("patch")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--force-file", action="store_true",
+                   help="write the file even under account sync (will not stick)")
     p.set_defaults(fn=cmd_apply)
+
+    p = sub.add_parser("apply-live",
+                       help="apply a patch through the running extension (sync-safe)")
+    p.add_argument("patch")
+    p.add_argument("--go", action="store_true",
+                   help="actually execute; without it, only resolves and previews")
+    p.add_argument("--port", type=int, default=8787)
+    p.set_defaults(fn=cmd_apply_live)
 
     p = sub.add_parser("backup", help="copy Bookmarks into backups/")
     p.add_argument("reason", nargs="?", default="manual")
