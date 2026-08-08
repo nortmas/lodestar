@@ -76,6 +76,55 @@ The dry run is not optional. Show its output to the user and get approval before
 real run — it is the only readable "before/after" that exists, since Chrome's UI has
 no diff.
 
+## Live restructuring via `exec` — synced profile, Chrome open
+
+The `apply` flow above rewrites the Bookmarks file and needs Chrome closed. It does not
+work on a profile signed in with sync: the sync server rewrites the file back on the
+next merge, silently undoing a file edit (proven twice — a delete got resurrected, and
+re-enabling sync after an edit duplicated the tree). When `AccountBookmarks` exists
+(`bm.py status` shows it as the bookmarks file, and `apply` refuses), writes go through
+the browser extension instead, by node **id**, while Chrome stays open:
+
+```bash
+bm.py exec ops.json          # preview (default) — prints the action list
+bm.py exec ops.json --go     # backs up the account store, then applies via the extension
+```
+
+Op shape — ids come from `bm.py call tree`, not guids:
+
+```json
+{"ops": [
+  {"op": "move",   "id": "5305", "parentId": "7966"},
+  {"op": "move",   "id": "7964", "parentId": "5268", "index": 4},
+  {"op": "update", "id": "7538", "title": "Finance"},
+  {"op": "remove", "id": "7540"}
+]}
+```
+
+`exec` has no create op. Make folders with
+`bm.py call create --arg '{"node":{"parentId":"<id>","title":"<name>"}}'`, which returns
+the new id. A standalone `create` does **not** back up (only `exec --go` does), so take
+a backup before a batch of creates.
+
+Two rules make a multi-step restructure safe:
+
+- **Build by id and pre-check.** Fetch a fresh `call tree`, index it by id, and assert
+  every source and target id in the op list is present before writing. A missing id
+  means the tree drifted since you planned — stop, do not write.
+
+- **`exec` validates the whole list against ONE snapshot taken before it runs.** A
+  `remove` is checked for emptiness against that snapshot, so you cannot empty a folder
+  and remove it in the same run — the snapshot still shows its children and `exec`
+  refuses. Split the work into phases and re-fetch the tree between them. Nested empties
+  therefore collapse one level per phase: emptying inner folders in phase N leaves their
+  parent empty for phase N+1. Do the folders-first reorder (re-`move` with an explicit
+  `index`) in the final phase, once the folder set has settled.
+
+Each phase is preview → show the user → `--go`. `--go` backs up the account store first,
+so every phase is independently recoverable via `bm.py backups` / `restore`. A folder
+`remove` only ever succeeds on an empty folder — `chrome.bookmarks.remove` refuses a
+non-empty one — which is a safety net, not an obstacle: it is why the phasing is forced.
+
 ## Why Chrome must be closed
 
 Chrome holds the bookmark tree in memory and rewrites the file on exit. Edits made

@@ -122,6 +122,12 @@ bookmarks, and thin folder count are the metrics that move.
 Work one branch at a time. Show the proposed changes as a readable list, get approval,
 then build the patch. See `references/method.md`.
 
+When the user wants a branch redesigned from scratch — "if these were a flat pile with
+no folders, how would you organize them?" — that is the **global reorganization**
+capability: read their preferences off the whole tree, propose a full taxonomy for
+approval, then execute it as a phased id-based migration. Steps are in
+`references/method.md` ("Reshape a branch from a blank slate").
+
 ## Writing changes
 
 Always in this order:
@@ -143,6 +149,12 @@ step saves the current state too.
 before any rollback happens, and the interaction between external edits and Chromium's
 sync metadata is not verified — see the sync section of `references/patching.md` for
 the safe procedure. Walk through it before any patch containing `delete`.
+
+**On a profile signed in with sync, this file flow does not apply.** The sync server
+rewrites the Bookmarks file back on the next merge, so writes must go through the Chrome
+extension by node id — `bm.py exec`, with Chrome left open — not `bm.py apply`. `apply`
+refuses when `AccountBookmarks` exists. The live path, and the phasing that makes a
+multi-step restructure safe, are in `references/patching.md` ("Live restructuring").
 
 Patch format and every operation are documented in `references/patching.md`.
 

@@ -2349,7 +2349,8 @@ def cmd_exec(args):
             if not dest or dest.get("url"):
                 bad.append(f"op #{i}: move target {o.get('parentId')} not a folder")
             else:
-                lines.append(f"move    {cur['title']!r} -> {dest['title']!r}")
+                at = f" @{o['index']}" if o.get("index") is not None else ""
+                lines.append(f"move    {cur['title']!r} -> {dest['title']!r}{at}")
         elif op == "update":
             new = o.get("title")
             lines.append(f"rename  {cur['title']!r} -> {new!r}")
@@ -2379,8 +2380,10 @@ def cmd_exec(args):
         if op == "remove":
             r = _bridge_call(args.port, "remove", {"id": o["id"]})
         elif op == "move":
-            r = _bridge_call(args.port, "move",
-                             {"id": o["id"], "dest": {"parentId": o["parentId"]}})
+            dest = {"parentId": o["parentId"]}
+            if o.get("index") is not None:
+                dest["index"] = o["index"]
+            r = _bridge_call(args.port, "move", {"id": o["id"], "dest": dest})
         elif op == "update":
             r = _bridge_call(args.port, "update",
                              {"id": o["id"], "changes": {"title": o["title"]}})

@@ -173,3 +173,77 @@ Rewriting titles wholesale is not. Trimming `| Site Name` suffixes and shortenin
 titles changes what the user recognizes when scanning, and there is no diff to review
 afterwards inside Chrome. Do it per branch with the proposed names visible, never as a
 single pass over the whole collection.
+
+**The short-name principle.** When the user does ask for readable names across a branch,
+the target is the shortest string that still says what the thing *is* — which is almost
+always the **brand or product name**, with the marketing tail cut:
+
+- Drop everything after the brand: `Wispr Flow | Voice Dictation` → `Wispr Flow`,
+  `ChatPDF - Chat with any PDF!` → `ChatPDF`, `Coinbase - Your Hosted Bitcoin Wallet`
+  → `Coinbase`. The tagline is noise once the folder gives the context.
+- When the brand is not in the title, recover it from the URL or tags and use it:
+  `Voice Meeting Notes` (otter.ai) → `Otter`, `Free Online Presentation` (canva.com)
+  → `Canva`. The tags carry the brand — that is what they are for.
+- No brand? Name the function, short: `MOV to GIF` → `MOV → GIF`,
+  `Online Video Downloader` → `Video Downloader`.
+- Two entries that resolve to the same brand need a disambiguator in parentheses, or
+  they read as duplicates: `HideMy.name — прокси`, `Стикеры (tlgrm.ru)` vs
+  `Стикеры (telegramchannels)`.
+- Keep the topic's language — a Russian/local item stays Russian (`Профи.ру`,
+  `Аренда без посредников (КРД)`); do not anglicise it to look uniform.
+- Leave a title that is already a bare brand untouched (`TinyPNG`, `Excalidraw`), and
+  fix any typo in passing (`Pixlr X - радактрор фото` → `Pixlr`).
+
+It is still a per-branch pass with the full before→after list shown for approval — the
+principle decides each name, it does not license skipping the review.
+
+### Ordering within a folder — subfolders first, then bookmarks
+
+Inside any folder, all subfolders come first, then the loose bookmarks. Chrome shows
+nodes in stored order, and a folder that mixes them — a few subfolders, then links,
+then more subfolders — reads as unsorted clutter. This is the default the user expects.
+
+It matters most right after a restructure: `move` and `create` append to the end of the
+destination, so newly-created subfolders land *below* the existing loose bookmarks. Any
+reorganize that adds or moves nodes must finish with a reorder pass that lifts every
+subfolder above the first URL. Reorder by re-`move`ing each subfolder to its target
+`index` (folders take indices `0..n-1`, in the chosen order — alphabetical unless the
+user asked otherwise); the bookmarks fall in behind them. Preview and apply it as part
+of the same restructure, not as a separate afterthought.
+
+### Reshape a branch from a blank slate (global reorganization)
+
+Distinct from the incremental tidying above. The trigger is the user asking, in effect,
+«если бы это была плоская куча закладок без папок, как бы ты её разложил?» — a full
+redesign of one branch's taxonomy, not a handful of moves. Four steps; only the last
+one writes.
+
+1. **Read the user's preferences off the whole tree, not just the branch.** The existing
+   structure *is* the spec. Walk every root and name what it reveals, then say it back
+   before proposing anything:
+   - what the top level sorts by — life-domain / role vs. content-type;
+   - how much depth the user tolerates where a topic is rich;
+   - whether a theme earns a folder at one or two bookmarks (granularity);
+   - which language each kind of topic is named in;
+   - what is kept apart from what (work vs. personal, tools vs. reading);
+   - whether loose bookmarks at a folder's root are normal for them.
+   These, with `profile.md`, govern every later choice. Treat any hard constraint the
+   user states outright — a depth cap («не глубже двух уровней»), a naming rule — as an
+   invariant, and check the final tree against it.
+
+2. **Flatten and redesign on paper.** `bm.py folder <branch>` for the full contents;
+   treat them as an unsorted pile. Group by function/theme into a taxonomy that obeys
+   the preferences from step 1. Present it as a table with per-folder counts, mark the
+   judgement calls (items that could sit in two places, singletons with no clean home),
+   and get approval. Nothing is executed here.
+
+3. **Execute as a phased id-based migration.** Reuse what exists: rename a folder into
+   its new role rather than creating a twin, promote a subfolder by moving it up rather
+   than rebuilding it, absorb loose items into the folder that already holds their kind.
+   On a synced profile all of this runs through `exec` by node id — the phasing rules
+   (why you cannot move-then-remove in one run, how nested empties collapse one level
+   per phase) are in `references/patching.md`, "Live restructuring".
+
+4. **Verify.** The bookmark count under the branch must be unchanged unless you deleted
+   on purpose; depth must be within any cap the user set; folders must precede loose
+   bookmarks. Then `bm.py sync` and `bm.py save`.
