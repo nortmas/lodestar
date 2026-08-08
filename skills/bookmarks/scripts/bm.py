@@ -378,14 +378,13 @@ def sync_records(data, recs, prune=False):
                                   or rec.get("title") != b["title"]
                                   or rec.get("url") != b["url"]):
             moved.append(guid)
-        # Enrichment describes a specific title+url. A move keeps it valid; an
-        # edited url does not.
-        key = content_key(b["title"], b["url"])
-        if rec.get("tags") and rec.get("content_key") and rec["content_key"] != key:
+        # Enrichment describes the page, which is identified by its URL. A move or
+        # a title cleanup keeps it valid; only an edited URL invalidates the tags.
+        # (Comparing rec['url'] — last sync's value — before it is overwritten below.)
+        if rec.get("tags") and rec.get("url") and rec["url"] != b["url"]:
             stale.append(guid)
             rec.pop("tags", None)
             rec.pop("summary", None)
-        rec["content_key"] = key
 
         if hot_root:
             in_hot = len(b["path"]) > 1 and b["path"][1] == hot_root
@@ -2046,8 +2045,9 @@ def _ws_send(sock, data: bytes):
 
 
 def _ws_recv(sock):
-    """One frame. Returns payload bytes, b'' for a control frame handled here,
-    or None on close/EOF."""
+    """One complete message, reassembling fragmented frames per RFC 6455.
+    Chrome splits large payloads (a full bookmark tree) across frames, so reading
+    a single frame would parse truncated JSON. Returns bytes, or None on close."""
     import struct
 
     def readn(n):
@@ -2059,36 +2059,43 @@ def _ws_recv(sock):
             buf += c
         return buf
 
-    h = readn(2)
-    if not h:
-        return None
-    opcode = h[0] & 0x0F
-    masked = h[1] & 0x80
-    ln = h[1] & 0x7F
-    if ln == 126:
-        ext = readn(2)
-        if ext is None:
+    chunks = []
+    while True:
+        h = readn(2)
+        if not h:
             return None
-        ln = struct.unpack(">H", ext)[0]
-    elif ln == 127:
-        ext = readn(8)
-        if ext is None:
+        fin = h[0] & 0x80
+        opcode = h[0] & 0x0F
+        masked = h[1] & 0x80
+        ln = h[1] & 0x7F
+        if ln == 126:
+            e = readn(2)
+            if e is None:
+                return None
+            ln = struct.unpack(">H", e)[0]
+        elif ln == 127:
+            e = readn(8)
+            if e is None:
+                return None
+            ln = struct.unpack(">Q", e)[0]
+        mask = readn(4) if masked else b""
+        if mask is None:
             return None
-        ln = struct.unpack(">Q", ext)[0]
-    mask = readn(4) if masked else b""
-    if mask is None:
-        return None
-    payload = readn(ln) if ln else b""
-    if payload is None:
-        return None
-    if masked:
-        payload = bytes(payload[i] ^ mask[i % 4] for i in range(len(payload)))
-    if opcode == 0x8:            # close
-        return None
-    if opcode == 0x9:            # ping -> pong
-        sock.sendall(bytes([0x8A, len(payload)]) + payload)
-        return b""
-    return payload
+        payload = readn(ln) if ln else b""
+        if payload is None:
+            return None
+        if masked and payload:
+            payload = bytes(b ^ mask[i & 3] for i, b in enumerate(payload))
+        if opcode == 0x8:            # close
+            return None
+        if opcode == 0x9:            # ping -> pong
+            sock.sendall(bytes([0x8A, len(payload)]) + payload)
+            continue
+        if opcode == 0xA:            # pong
+            continue
+        chunks.append(payload)       # data frame (text/binary/continuation)
+        if fin:
+            return b"".join(chunks)
 
 
 def cmd_bridge(args):
@@ -2211,6 +2218,8 @@ def _bridge_call(port, cmd, cargs=None, timeout=60):
             f"Start it with: bm.py bridge")
     if isinstance(resp, dict) and resp.get("error"):
         die(f"extension error: {resp['error']}")
+    if isinstance(resp, dict) and "result" in resp:
+        return resp["result"]
     return resp
 
 
@@ -2300,6 +2309,93 @@ def cmd_apply_live(args):
     print(f"\nremoved {done} nodes через Chrome"
           + (f", {errors} errors" if errors else "")
           + ". Sync will carry the deletions to the account and other devices.")
+
+
+def cmd_exec(args):
+    """Execute id-based structural ops through the extension: remove empty folders,
+    move nodes, rename/retitle. Previews by default; --go executes after a backup.
+    Ops reference live chrome.bookmarks ids (from `call tree`), not guids."""
+    with open(args.ops, encoding="utf-8") as fh:
+        payload = json.load(fh)
+    ops = payload["ops"] if isinstance(payload, dict) else payload
+
+    tree = _bridge_call(args.port, "tree")
+    info = {}
+
+    def w(n, path):
+        info[n["id"]] = {"title": n.get("title", ""), "url": n.get("url"),
+                         "path": path, "kids": len(n.get("children", []))}
+        for c in n.get("children", []):
+            w(c, path + " › " + (n.get("title") or ""))
+    for root in tree:
+        w(root, "")
+
+    lines, bad = [], []
+    for i, o in enumerate(ops):
+        op = o.get("op")
+        nid = o.get("id")
+        cur = info.get(nid)
+        if cur is None:
+            bad.append(f"op #{i}: id {nid} not in live tree")
+            continue
+        if op == "remove":
+            if cur["kids"]:
+                bad.append(f"op #{i}: {cur['title']!r} is not empty "
+                           f"({cur['kids']} inside) — refusing to remove")
+            else:
+                lines.append(f"remove  {cur['title']!r}  ({cur['path'].strip(' ›')})")
+        elif op == "move":
+            dest = info.get(o.get("parentId"))
+            if not dest or dest.get("url"):
+                bad.append(f"op #{i}: move target {o.get('parentId')} not a folder")
+            else:
+                lines.append(f"move    {cur['title']!r} -> {dest['title']!r}")
+        elif op == "update":
+            new = o.get("title")
+            lines.append(f"rename  {cur['title']!r} -> {new!r}")
+        else:
+            bad.append(f"op #{i}: unknown op {op!r}")
+
+    if bad:
+        print("REFUSING — problems found, nothing executed:")
+        for b in bad:
+            print("  " + b)
+        sys.exit(2)
+
+    print(f"{len(lines)} operations:")
+    for ln in lines[:args.show]:
+        print("  " + ln)
+    if len(lines) > args.show:
+        print(f"  … and {len(lines) - args.show} more")
+
+    if not args.go:
+        print("\npreview only — re-run with --go to execute through Chrome.")
+        return
+
+    backup_account_store(f"before exec of {len(ops)} ops")
+    done = errors = 0
+    for o in ops:
+        op = o.get("op")
+        if op == "remove":
+            r = _bridge_call(args.port, "remove", {"id": o["id"]})
+        elif op == "move":
+            r = _bridge_call(args.port, "move",
+                             {"id": o["id"], "dest": {"parentId": o["parentId"]}})
+        elif op == "update":
+            r = _bridge_call(args.port, "update",
+                             {"id": o["id"], "changes": {"title": o["title"]}})
+        else:
+            r = {"error": "unknown"}
+        if isinstance(r, dict) and r.get("error"):
+            errors += 1
+            print(f"  error on {op} {o.get('id')}: {r['error']}", file=sys.stderr)
+        else:
+            done += 1
+        if done % 50 == 0:
+            print(f"  {done}/{len(ops)}", file=sys.stderr)
+    print(f"\ndone: {done} applied"
+          + (f", {errors} errors" if errors else "")
+          + ". Sync carries the changes to the account and other devices.")
 
 
 def backup_account_store(reason):
@@ -2432,6 +2528,13 @@ def main():
                    help="actually execute; without it, only resolves and previews")
     p.add_argument("--port", type=int, default=8787)
     p.set_defaults(fn=cmd_apply_live)
+
+    p = sub.add_parser("exec", help="run id-based structural ops through the extension")
+    p.add_argument("ops", help="JSON file of {ops:[{op,id,...}]}")
+    p.add_argument("--go", action="store_true", help="execute; default is preview")
+    p.add_argument("--show", type=int, default=60, help="how many ops to print")
+    p.add_argument("--port", type=int, default=8787)
+    p.set_defaults(fn=cmd_exec)
 
     p = sub.add_parser("backup", help="copy Bookmarks into backups/")
     p.add_argument("reason", nargs="?", default="manual")
