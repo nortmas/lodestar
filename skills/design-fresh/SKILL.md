@@ -83,11 +83,12 @@ register:
 - **`/lodestar:design-variations`** — packages the divergence-mode worlds (or any
   element) into an interactive pickable artifact. `design-fresh` decides *which
   worlds*; `design-variations` renders them for review.
-- **`ui-ux-designer`** subagent — use as an adversarial critic on the chosen world
-  before finalizing.
-- Complements the installed **`frontend-design`** skill, which has no
-  cross-session memory and does not force divergence on dissatisfaction — this
-  skill adds both.
+- **`design-critic`** subagent (this plugin, `lodestar:design-critic`) — use as an
+  adversarial critic on the chosen world before finalizing.
+- If the **`frontend-design`** plugin is enabled in this project, it complements
+  this skill — it has no cross-session memory and does not force divergence on
+  dissatisfaction, which this skill adds. When it is not enabled, this skill
+  stands on its own.
 
 ## Reference
 
