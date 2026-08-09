@@ -10,8 +10,16 @@ Chrome stores bookmarks as a single JSON file. This skill reads it directly, kee
 a searchable sidecar index next to it, and writes back only through reviewed patches.
 
 **Reads are always safe.** Chrome does not lock the file, so search, audit and
-reporting work with the browser open. **Writes require Chrome to be closed**, because
-Chrome holds the tree in memory and overwrites the file when it exits.
+reporting work with the browser open and never touch the tree.
+
+**How writes reach Chrome depends on the profile.** On a profile signed in with sync —
+the usual case, where `bm.py status` shows the bookmarks file as `AccountBookmarks` —
+edits go through a small Chrome extension (`bm.py exec`) **with the browser open**;
+writing the file directly would be undone by the next sync merge. On an unsynced profile
+there is no extension: edits are written to the file with `bm.py apply` **while Chrome is
+closed**, because Chrome holds the tree in memory and overwrites the file on exit. The
+skill picks the right path from `bm.py status`; the mechanics are in
+`references/patching.md` ("Live restructuring" vs. "Applying").
 
 All work goes through one script, invoked as:
 
