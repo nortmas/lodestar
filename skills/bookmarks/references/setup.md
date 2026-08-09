@@ -240,3 +240,36 @@ bm.py backup "baseline before any changes"
 Take that first backup before the user's first write session, and tell them
 `bm.py restore --last` is how they undo a step. `backup_keep` in `config.json` controls
 retention (default 30, never below 5).
+
+## 9. The Chrome helper — only if the profile is synced
+
+Skip this on an unsynced profile: `bm.py apply` writes the file directly and no helper is
+needed. If `bm.py status` shows the bookmarks file as `AccountBookmarks`, the profile is
+signed in with sync and every write must go through the browser extension instead (see
+`references/patching.md`, "Live restructuring"). Two pieces:
+
+**The bridge** — a localhost relay the skill starts and leaves running:
+
+```bash
+bm.py bridge        # 127.0.0.1:8787; run in the background, keep it alive
+```
+
+**The extension** — loaded once by the user, in plain terms:
+
+1. Open `chrome://extensions`.
+2. Turn on **Developer mode** (top-right).
+3. **Load unpacked** → choose
+   `~/.claude/skills/lodestar/skills/bookmarks/extension`.
+
+It appears as **"Bookmark Agent Bridge"**. Leave it enabled. Chrome may switch off an
+unpacked extension between restarts — if writes stop, re-enable it here first.
+
+Confirm the whole path end to end:
+
+```bash
+bm.py call ping     # {"ok":true} means bridge + extension are both live
+```
+
+`{"error":"extension not connected"}` means the bridge is up but Chrome isn't answering —
+reload the extension at `chrome://extensions`. A connection-refused error means the bridge
+itself is not running — start `bm.py bridge` again.

@@ -48,11 +48,17 @@ skill hardcodes what counts as too deep, too small, too old, or too big.
 
 ## Commands
 
-This skill is invoked explicitly (`/lodestar:bookmarks …`) and never auto-triggers. Read
-the **first word** of the invocation as a command and the rest as its target, then follow
-the section it points to. **With no command, present `help` (below) and then run
-`bm.py status`**, so the user sees what they can do and the current state in one go. An
-unrecognized first word → show `help` and ask, do not guess.
+This skill is invoked explicitly (`/lodestar:bookmarks …`) and never auto-triggers.
+
+**First, check whether it is set up.** Run `bm.py status`. If `profile.md` is missing or
+the index is empty, this is a **first run** — ignore whatever command was typed and go to
+*First run* below. Do not print a help screen or try to act on a folder before setup
+exists.
+
+If it is set up, read the **first word** of the invocation as a command and the rest as
+its target, then follow the section it points to. **With no command, present `help`
+(below) and the one-line state from `bm.py status`**, so the user sees what they can do
+and that it is ready. An unrecognized first word → show `help` and ask, do not guess.
 
 | Command | Target | What it does |
 |---------|--------|--------------|
@@ -71,37 +77,66 @@ Every writing command still obeys the ceremony table in "Writing changes": a glo
 restructure (`reshape`, `merge`, bulk `rename`) previews and backs up; a single `add`
 does not.
 
+### First run — set it up *with* the user
+
+A missing `profile.md` or empty index means nothing is configured yet. Do **not** make
+the user learn commands or read setup docs — drive it yourself, running each step and
+asking only what you cannot infer from their tree. The full script is
+`references/setup.md`; the shape:
+
+1. Say hi and, in one line, what this is.
+2. Create the data directory — `references/setup.md` §1.
+3. **Learn how they sort — this is the important part.** Run `bm.py profile-scan` (it
+   reads their existing bookmark tree and reports what it reveals), then ask the short
+   interview questions from setup.md: what each top folder is for, what must never be
+   deleted, their language/naming habits, where unsorted links land. Write `profile.md`
+   and `config.json` from the answers. Everything the skill does later is governed by
+   this, so do not skip it or invent conventions — quote their own tree back and ask
+   about the rest.
+4. Build the search — `bm.py sync` for the first index — then offer the enrichment pass
+   (`references/index.md`) that makes search-by-meaning work.
+5. On a synced profile, **turn on the Chrome helper** (the three steps in `help` /
+   setup.md §9) so edits are possible. Skip on an unsynced profile.
+6. `bm.py backup "baseline"`, and tell them `bm.py restore --last` undoes any step.
+
+Then say it's ready and show `help`. Keep it conversational — one thing at a time, a
+question at a time, never a wall of steps.
+
 ### `help` — what to tell the user
 
-On `help` (and on a bare invocation), give a short orientation in the user's language,
-covering these points — not as a raw dump, but tight and readable:
+On `help` (and on a bare invocation), give a short, plain-language orientation in the
+user's language. **No jargon** — a smart 12-year-old should follow every line. Do **not**
+mention sync, `AccountBookmarks`, MV3, the `chrome.bookmarks` API, node ids, the bridge
+port, or *why* the file can't be edited directly. That is plumbing; the user only needs
+to know what they can do and that it is safe. Cover:
 
-- **What it is.** A companion to Chrome bookmarks: a searchable sidecar index kept next
-  to the browser's own store. It lets you find by meaning, file new links, audit for
-  dead/obsolete ones, and reorganize whole branches — semantic search plus safe bulk
-  edits Chrome's UI has no way to do.
-- **The commands**, one line each — reproduce the table above (`reshape`, `rename`,
-  `tidy`, `merge`, `find`, `add`, `audit`, `sync`, `save`), with an example invocation
-  like `/lodestar:bookmarks reshape Media`.
-- **Reads are always safe; writes are careful.** Search and audit run with Chrome open
-  and never touch the tree. Any bulk change previews first, backs up the store, and is
-  reversible with `bm.py restore`.
-- **How writes reach Chrome — the extension.** On a profile signed in with sync (the
-  usual case, `bm.py status` shows `AccountBookmarks`), the Bookmarks file cannot be
-  edited directly — the sync server would overwrite it. Instead a small **unpacked MV3
-  Chrome extension** ("Bookmark Agent Bridge", in `skills/bookmarks/extension/`) performs
-  every change through Chrome's own `chrome.bookmarks` API while the browser stays open.
-  It talks to the skill over a localhost relay started with **`bm.py bridge`** (127.0.0.1:8787).
-  So two things must be live for any write: the bridge process running, and the extension
-  loaded in `chrome://extensions` (Developer mode → *Load unpacked*). Check both with
-  **`bm.py call ping`** — `{"ok":true}` means ready; an error means reload the extension
-  or restart the bridge. First-time setup of the extension and bridge is in
-  `references/setup.md`.
-- **Where the data lives.** The index, your `profile.md` (personal taxonomy and
-  thresholds), and timestamped backups sit in `~/.claude/bookmarks/`, a private git repo
-  — nothing bookmark-related is ever written into this public skill repo.
-- Point out that everything is a proposal you approve before it runs, and that deletions
-  are treated as one-way (they may reach the synced account before any local rollback).
+- **What it does, in one breath.** Something like: "I help you tidy your Chrome
+  bookmarks — find any link just by describing it, save new ones into the right folder,
+  clear out dead links, and reorganize whole folders. Things the bookmarks menu can't do."
+- **First time? Just run it — I set everything up with you.** Say plainly that on the
+  first run they don't need to know any commands: "I'll look at your current bookmarks,
+  ask you a few short questions about how you like them sorted, build the search, and help
+  you switch on a small Chrome helper. You just answer the questions — takes a couple of
+  minutes." The only thing they do by hand is turning on the helper:
+  1. In Chrome, open `chrome://extensions`.
+  2. Turn on **Developer mode** (switch, top-right).
+  3. Click **Load unpacked** and choose the folder
+     `~/.claude/skills/lodestar/skills/bookmarks/extension`.
+  Then it's ready. If I ever say I can't reach your bookmarks, this helper just needs
+  switching back on there.
+- **The commands, as a table** — a `Command | what it does` grid (like the Commands
+  table above), one plain-language line each: `reshape` = re-sort a folder from scratch;
+  `rename` = give everything short, clear names; `tidy` = quick cleanup; `merge` =
+  combine folders; `find` = search; `add` = save a link; `audit` = find broken links;
+  `sync`/`save` = keep everything saved. Put one real example under it
+  (`/lodestar:bookmarks reshape Media`).
+- **It's safe.** "Looking things up never changes anything. Before I change or delete
+  anything I show you exactly what I'm about to do and wait for your OK — and I keep a
+  backup, so any change can be undone."
+- **Your stuff stays yours.** "Everything lives in a private folder on your own
+  computer — nothing about your bookmarks is ever shared or made public."
+
+Keep the whole thing to about a screen. Detail on demand, not by default.
 
 ### `reshape` — ask about preferences first
 
