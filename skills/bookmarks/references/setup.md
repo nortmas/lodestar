@@ -248,10 +248,15 @@ needed. If `bm.py status` shows the bookmarks file as `AccountBookmarks`, the pr
 signed in with sync and every write must go through the browser extension instead (see
 `references/patching.md`, "Live restructuring"). Two pieces:
 
-**The bridge** — a localhost relay the skill starts and leaves running:
+**The bridge** — a localhost relay between the skill and the extension. You do **not**
+start it by hand: any `bm.py call`/`exec` runs `ensure_bridge()` first, which spawns a
+detached `bm.py bridge` on 127.0.0.1:8787 if nothing is listening and waits for it to come
+up (log at `~/.claude/bookmarks/bridge.log`). It then stays running across sessions until
+the machine reboots or it is killed (`pkill -f "bm.py bridge"`). Start it manually only to
+debug:
 
 ```bash
-bm.py bridge        # 127.0.0.1:8787; run in the background, keep it alive
+bm.py bridge        # 127.0.0.1:8787
 ```
 
 **The extension** — loaded once by the user, in plain terms:
@@ -261,8 +266,11 @@ bm.py bridge        # 127.0.0.1:8787; run in the background, keep it alive
 3. **Load unpacked** → choose
    `~/.claude/skills/lodestar/skills/bookmarks/extension`.
 
-It appears as **"Bookmark Agent Bridge"**. Leave it enabled. Chrome may switch off an
-unpacked extension between restarts — if writes stop, re-enable it here first.
+It appears as **"Bookmark Agent Bridge"**. Leave it enabled. It self-heals: a
+`chrome.alarms` wake fires every minute so the worker reconnects to the bridge on its own
+after the bridge restarts or Chrome reaps the idle worker — no clicking required. Chrome
+may still fully switch off an unpacked extension between restarts; if writes stop for good,
+re-enable it here.
 
 Confirm the whole path end to end:
 
@@ -270,6 +278,9 @@ Confirm the whole path end to end:
 bm.py call ping     # {"ok":true} means bridge + extension are both live
 ```
 
-`{"error":"extension not connected"}` means the bridge is up but Chrome isn't answering —
-reload the extension at `chrome://extensions`. A connection-refused error means the bridge
-itself is not running — start `bm.py bridge` again.
+`{"error":"extension not connected"}` means the bridge is up but the extension has not
+(re)connected yet — normal for up to a minute right after the bridge auto-starts from cold,
+because the worker reconnects on its once-a-minute alarm. If it persists, reload the
+extension at `chrome://extensions`. A connection-refused error should not happen now that
+`bm.py` auto-starts the relay; if it does, the relay failed to launch — run `bm.py bridge`
+by hand to see the error.

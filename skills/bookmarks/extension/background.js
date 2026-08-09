@@ -8,6 +8,10 @@ let ws = null;
 let heartbeat = null;
 
 function connect() {
+  // Never stack a second socket on top of a live one.
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
   try {
     ws = new WebSocket(BRIDGE);
   } catch (e) {
@@ -42,6 +46,16 @@ function connect() {
 // Reconnect when Chrome wakes the worker for any reason.
 chrome.runtime.onStartup.addListener(connect);
 chrome.runtime.onInstalled.addListener(connect);
+
+// The heartbeat above only keeps an ALREADY-connected worker alive. Once the
+// socket drops (e.g. the bridge was restarted) an idle worker is reaped and has
+// nothing left to fire setTimeout — so it never reconnects on its own. An alarm
+// is the one thing that wakes a dead MV3 worker: it fires every minute (the
+// platform minimum), reviving the worker so `connect()` can re-establish the
+// socket against a freshly-started bridge. This is what makes the skill's
+// auto-start of the bridge actually reconnect without the user touching Chrome.
+chrome.alarms.create("reconnect", { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener((a) => { if (a.name === "reconnect") connect(); });
 
 function bm(method, ...a) {
   return new Promise((resolve, reject) => {

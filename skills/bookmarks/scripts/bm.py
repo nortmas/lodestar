@@ -2107,6 +2107,9 @@ def cmd_bridge(args):
 
     global _ext_sock
 
+    # Last real command (not the extension's keepalive) — drives idle shutdown.
+    last_cmd = [time.monotonic()]
+
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args):  # noqa: A002 - match base signature
             pass
@@ -2151,6 +2154,7 @@ def cmd_bridge(args):
                 print("extension disconnected", file=sys.stderr)
 
         def do_POST(self):
+            last_cmd[0] = time.monotonic()
             n = int(self.headers.get("Content-Length", 0))
             try:
                 body = json.loads(self.rfile.read(n) or b"{}")
@@ -2188,11 +2192,30 @@ def cmd_bridge(args):
     print(f"bridge listening on 127.0.0.1:{args.port}", file=sys.stderr)
     print("load/enable the extension now; it will connect automatically",
           file=sys.stderr)
+
+    if args.idle and args.idle > 0:
+        idle_seconds = args.idle * 60
+
+        def watchdog():
+            # The extension's 20s keepalive is deliberately NOT counted as
+            # activity (it never touches do_POST), so a connected-but-unused
+            # bridge still times out. `ensure_bridge` restarts it on next use.
+            while True:
+                time.sleep(30)
+                if time.monotonic() - last_cmd[0] >= idle_seconds:
+                    print(f"idle for {args.idle} min with no commands — "
+                          f"shutting down", file=sys.stderr)
+                    srv.shutdown()
+                    return
+
+        threading.Thread(target=watchdog, daemon=True).start()
+
     srv.serve_forever()
 
 
 def cmd_call(args):
     import http.client
+    ensure_bridge(args.port)
     payload = args.json if args.json else json.dumps(
         {"cmd": args.cmd, "args": json.loads(args.args)} if args.args
         else {"cmd": args.cmd})
@@ -2204,9 +2227,70 @@ def cmd_call(args):
     print(resp)
 
 
-def _bridge_call(port, cmd, cargs=None, timeout=60):
-    """Send one command to the extension via the bridge; return its parsed reply."""
+def _bridge_is_up(port):
+    """True if the relay is listening and answering on 127.0.0.1:port."""
     import http.client
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=1)
+        conn.request("GET", "/")
+        conn.getresponse().read()
+        conn.close()
+        return True
+    except OSError:
+        return False
+
+
+def _extension_connected(port):
+    """Ping through the relay; True only if the extension answered."""
+    import http.client
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
+        conn.request("POST", "/call", json.dumps({"cmd": "ping"}),
+                     {"Content-Type": "application/json"})
+        r = json.loads(conn.getresponse().read().decode("utf-8"))
+        conn.close()
+        return isinstance(r, dict) and not r.get("error")
+    except OSError:
+        return False
+
+
+def ensure_bridge(port):
+    """Make sure the relay is running before a call needs it. If nothing is
+    listening, spawn a detached `bm.py bridge` and wait for it to accept
+    connections; then give a loaded extension a moment to (re)connect its
+    socket. Returns True once the relay is up. Starting the relay does not load
+    the Chrome extension — that is the user's one manual step — so a running
+    relay with no extension still surfaces "extension not connected"."""
+    if _bridge_is_up(port):
+        return True
+    log_path = os.path.join(DATA_DIR, "bridge.log")
+    try:
+        logf = open(log_path, "ab")  # noqa: SIM115 - handed to the child process
+    except OSError:
+        logf = subprocess.DEVNULL
+    subprocess.Popen(
+        [sys.executable, os.path.abspath(__file__), "bridge", "--port", str(port)],
+        stdout=logf, stderr=logf, stdin=subprocess.DEVNULL, start_new_session=True)
+    print(f"bridge was not running — started it on 127.0.0.1:{port} "
+          f"(log: {log_path})", file=sys.stderr)
+    for _ in range(50):  # up to ~5s for the relay to bind
+        if _bridge_is_up(port):
+            break
+        time.sleep(0.1)
+    else:
+        return False
+    for _ in range(40):  # up to ~8s for a loaded extension to reconnect
+        if _extension_connected(port):
+            break
+        time.sleep(0.2)
+    return True
+
+
+def _bridge_call(port, cmd, cargs=None, timeout=60):
+    """Send one command to the extension via the bridge; return its parsed reply.
+    Auto-starts the relay if it is not already running."""
+    import http.client
+    ensure_bridge(port)
     body = json.dumps({"cmd": cmd, "args": cargs or {}})
     try:
         conn = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout + 5)
@@ -2214,8 +2298,8 @@ def _bridge_call(port, cmd, cargs=None, timeout=60):
         resp = json.loads(conn.getresponse().read().decode("utf-8"))
         conn.close()
     except OSError as exc:
-        die(f"cannot reach the bridge on 127.0.0.1:{port} ({exc}). "
-            f"Start it with: bm.py bridge")
+        die(f"cannot reach the bridge on 127.0.0.1:{port} ({exc}) even after trying "
+            f"to start it. Start it by hand with: bm.py bridge")
     if isinstance(resp, dict) and resp.get("error"):
         die(f"extension error: {resp['error']}")
     if isinstance(resp, dict) and "result" in resp:
@@ -2454,6 +2538,8 @@ def main():
     p = sub.add_parser("bridge", help="run the localhost relay for the Chrome extension")
     p.add_argument("--port", type=int, default=8787)
     p.add_argument("--timeout", type=int, default=60)
+    p.add_argument("--idle", type=int, default=30,
+                   help="exit after this many minutes with no commands (0 = never)")
     p.set_defaults(fn=cmd_bridge)
 
     p = sub.add_parser("call", help="send one command to the extension via the bridge")
