@@ -101,10 +101,15 @@ Op shape — ids come from `bm.py call tree`, not guids:
 ]}
 ```
 
-`exec` has no create op. Make folders with
-`bm.py call create --arg '{"node":{"parentId":"<id>","title":"<name>"}}'`, which returns
-the new id. A standalone `create` does **not** back up (only `exec --go` does), so take
-a backup before a batch of creates.
+`exec` has no create op. Add a bookmark, or make a folder, with
+`bm.py call create --arg '{"node":{"parentId":"<id>","title":"<name>","url":"<url>"}}'`
+— omit `url` for a folder — which returns the new id.
+
+A standalone `create` does **not** back up (only `exec --go` does). That is fine for a
+single add: creating a node destroys nothing, and removing it again is one `exec` op.
+Take a backup first only when the creates are part of a **restructure** — a new folder
+set you are about to move existing bookmarks into, where a half-applied batch would
+leave the tree in a shape neither you nor the user can reconstruct.
 
 Two rules make a multi-step restructure safe:
 

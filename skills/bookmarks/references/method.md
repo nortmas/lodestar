@@ -39,8 +39,13 @@ already holds that kind of thing. Land the bookmark next to its siblings even if
 theoretically better category exists elsewhere — consistency beats correctness, because
 the user navigates from memory.
 
-Propose the destination and one alternative. Do not create a folder for a single
-bookmark; that is what thin folders are made of.
+When one folder is clearly the home, file it there and report where it went — a
+confirmation round-trip on a single add costs the user more than a wrong guess, which
+is one `move` op to fix. Ask only when the candidates are genuinely comparable, and ask
+with `AskUserQuestion` so the answer is a click: one option per folder, labelled with
+its path and what already lives in it.
+
+Do not create a folder for a single bookmark; that is what thin folders are made of.
 
 ## Audit
 
@@ -215,8 +220,14 @@ of the same restructure, not as a separate afterthought.
 
 Distinct from the incremental tidying above. The trigger is the user asking, in effect,
 «если бы это была плоская куча закладок без папок, как бы ты её разложил?» — a full
-redesign of one branch's taxonomy, not a handful of moves. Four steps; only the last
-one writes.
+redesign of one branch's taxonomy, not a handful of moves. The steps below; only the
+last one writes.
+
+0. **Ask first whether to read preferences off the current structure.** One
+   `AskUserQuestion`: infer their organizing preferences from the existing tree, or start
+   clean? On *no*, skip step 1 entirely and group purely by function under `profile.md`'s
+   constraints — a user escaping the current mess does not want it treated as the spec.
+   Only on *yes* do step 1.
 
 1. **Read the user's preferences off the whole tree, not just the branch.** The existing
    structure *is* the spec. Walk every root and name what it reveals, then say it back
