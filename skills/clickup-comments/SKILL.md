@@ -21,6 +21,13 @@ How to draft and post comments on ClickUp tickets.
   "Happy to…", "Feel free to…", "Let me know if…". State things plainly.
 - **Clear referents only.** Never mention a person or group the reader can't
   identify from the thread — no vague "they"/"them".
+- **Never promise a future deploy.** No "goes out with the next deployment",
+  "will be live after the deploy", or any variant. By the time the comment is
+  read the change is normally already running, so the sentence is both wrong
+  and noise. Pushed, and the project deploys on push: state it as done — "it's
+  live" — or, usually better, say nothing about deploying at all. Not pushed
+  yet: do not mention deploying in any form. Deploy manual or gated: name what
+  is required and who does it, never a vague future tense.
 
 ## Structure
 
@@ -30,7 +37,8 @@ How to draft and post comments on ClickUp tickets.
   up to it.
 - **Make asks explicit.** If something is blocked or a decision is needed,
   state exactly what is needed and from whom.
-- **End with the next step** when there is one.
+- **End with the next step** when there is one — but never a deploy promise
+  (see Voice).
 - **No filler closers.** Stop when the point is made — don't tack on
   unsolicited offers or hedges at the end.
 
