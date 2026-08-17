@@ -1,0 +1,499 @@
+<!doctype html>
+<!-- ============================================================================
+     VISUAL-REPORT TEMPLATE: lodestar /lodestar:visual-report
+     One self-contained file. Inline CSS only, ZERO external hosts (no CDN, no
+     web fonts, no remote images) so it renders identically as a local file and
+     as a published Claude Artifact.
+
+     The skill fills the {{...}} slots and the report body. Do NOT add <script src>,
+     <link rel=stylesheet>, @import url(), or remote <img src>. Charts are inline
+     <svg>. Everything else is generic. See references/comment-layer.md.
+
+     Review layer: gated by <html data-review>. "on" (local-file mode) enables the
+     click-to-comment margin cards; "off" (Artifact mode) ships a clean read-only
+     report and never initialises the overlay.
+     ============================================================================ -->
+<html lang="{{LANG}}" data-review="{{REVIEW_MODE}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{REPORT_TITLE}}</title>
+<style>
+  /* ---- palette: light is the base, dark redefines the same tokens ---- */
+  :root{
+    --vr-bg:#f6f8fa; --vr-surface:#ffffff; --vr-surface-2:#f0f3f7;
+    --vr-text:#1c2530; --vr-muted:#5b6673; --vr-faint:#8a94a1;
+    --vr-border:#e3e8ee; --vr-border-strong:#cfd4dc;
+    --vr-accent:#2563eb; --vr-accent-fg:#ffffff;
+    --vr-crit:#b3261e; --vr-high:#c2410c; --vr-med:#b7791f; --vr-low:#2563eb; --vr-ok:#15803d;
+    /* categorical palette for injected charts: swap in {{THEME_TOKENS}} if branded */
+    --vr-cat-1:#2563eb; --vr-cat-2:#7c3aed; --vr-cat-3:#0891b2;
+    --vr-cat-4:#c2410c; --vr-cat-5:#15803d; --vr-cat-6:#b7791f;
+    --vr-shadow:0 1px 3px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.10);
+    --vr-shadow-lg:0 12px 32px rgba(16,24,40,.14);
+    --vr-radius:12px; --vr-gutter-w:340px; --vr-content-w:760px;
+    --vr-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --vr-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --vr-bg:#0e1116; --vr-surface:#161b22; --vr-surface-2:#1c232d;
+      --vr-text:#e6edf3; --vr-muted:#9aa7b4; --vr-faint:#6e7b8a;
+      --vr-border:#2a323c; --vr-border-strong:#3a444f;
+      --vr-accent:#4f8cff; --vr-accent-fg:#0b0e13;
+      --vr-crit:#f2544b; --vr-high:#f0813f; --vr-med:#e0b13a; --vr-low:#4f8cff; --vr-ok:#4ac97e;
+      --vr-cat-1:#4f8cff; --vr-cat-2:#a274ff; --vr-cat-3:#33c2dd;
+      --vr-cat-4:#f0813f; --vr-cat-5:#4ac97e; --vr-cat-6:#e0b13a;
+      --vr-shadow:0 1px 3px rgba(0,0,0,.4); --vr-shadow-lg:0 12px 32px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --vr-bg:#0e1116; --vr-surface:#161b22; --vr-surface-2:#1c232d;
+    --vr-text:#e6edf3; --vr-muted:#9aa7b4; --vr-faint:#6e7b8a;
+    --vr-border:#2a323c; --vr-border-strong:#3a444f;
+    --vr-accent:#4f8cff; --vr-accent-fg:#0b0e13;
+    --vr-crit:#f2544b; --vr-high:#f0813f; --vr-med:#e0b13a; --vr-low:#4f8cff; --vr-ok:#4ac97e;
+    --vr-cat-1:#4f8cff; --vr-cat-2:#a274ff; --vr-cat-3:#33c2dd;
+    --vr-cat-4:#f0813f; --vr-cat-5:#4ac97e; --vr-cat-6:#e0b13a;
+    --vr-shadow:0 1px 3px rgba(0,0,0,.4); --vr-shadow-lg:0 12px 32px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--vr-bg);color:var(--vr-text);font-family:var(--vr-font);
+    font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+
+  /* ---- layout: centred content column + reserved right gutter for cards ---- */
+  .vr-shell{max-width:calc(var(--vr-content-w) + var(--vr-gutter-w) + 48px);
+    margin:0 auto;padding:0 24px;display:grid;
+    grid-template-columns:minmax(0,var(--vr-content-w)) var(--vr-gutter-w);gap:24px}
+  .vr-main{min-width:0;padding:40px 0 120px}
+  .vr-gutter-col{position:relative}
+  html[data-review="off"] .vr-shell{grid-template-columns:minmax(0,var(--vr-content-w));justify-content:center}
+  html[data-review="off"] .vr-gutter-col{display:none}
+  @media (max-width:1100px){
+    .vr-shell{grid-template-columns:minmax(0,1fr);max-width:var(--vr-content-w)}
+    .vr-gutter-col{display:none}     /* narrow: cards move to the bottom sheet */
+  }
+
+  /* ---- report header ---- */
+  .vr-head{margin-bottom:28px}
+  .vr-eyebrow{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--vr-muted)}
+  .vr-title{font-size:1.9rem;line-height:1.2;font-weight:800;margin:6px 0 8px}
+  .vr-subtitle{color:var(--vr-muted);font-size:1.02rem;margin:0}
+  .vr-meta{margin-top:12px;font-size:.8rem;color:var(--vr-faint)}
+
+  /* ---- metric cards ---- */
+  .vr-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin:8px 0 32px}
+  .vr-metric{background:var(--vr-surface);border:1px solid var(--vr-border);border-radius:var(--vr-radius);
+    padding:16px;box-shadow:var(--vr-shadow)}
+  .vr-metric-value{font-size:1.8rem;font-weight:800;line-height:1}
+  .vr-metric-label{margin-top:6px;font-size:.78rem;color:var(--vr-muted)}
+  .vr-metric[data-tone="crit"] .vr-metric-value{color:var(--vr-crit)}
+  .vr-metric[data-tone="high"] .vr-metric-value{color:var(--vr-high)}
+  .vr-metric[data-tone="med"]  .vr-metric-value{color:var(--vr-med)}
+  .vr-metric[data-tone="ok"]   .vr-metric-value{color:var(--vr-ok)}
+
+  /* ---- section + item ---- */
+  .vr-section{margin:36px 0}
+  .vr-section > h2{font-size:1.25rem;font-weight:700;margin:0 0 4px;scroll-margin-top:16px}
+  .vr-section-note{color:var(--vr-muted);font-size:.9rem;margin:0 0 16px}
+  .vr-item{background:var(--vr-surface);border:1px solid var(--vr-border);border-left:3px solid var(--vr-border-strong);
+    border-radius:var(--vr-radius);padding:16px 18px;margin:12px 0;box-shadow:var(--vr-shadow)}
+  .vr-item[data-sev="crit"]{border-left-color:var(--vr-crit)}
+  .vr-item[data-sev="high"]{border-left-color:var(--vr-high)}
+  .vr-item[data-sev="med"]{border-left-color:var(--vr-med)}
+  .vr-item[data-sev="low"]{border-left-color:var(--vr-low)}
+  .vr-item[data-sev="ok"]{border-left-color:var(--vr-ok)}
+  .vr-item-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .vr-item-title{font-weight:700;font-size:1rem;margin:0}
+  .vr-chip{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+    padding:2px 8px;border-radius:999px;background:var(--vr-surface-2);color:var(--vr-muted);white-space:nowrap}
+  .vr-chip[data-sev="crit"]{background:color-mix(in srgb,var(--vr-crit) 16%,transparent);color:var(--vr-crit)}
+  .vr-chip[data-sev="high"]{background:color-mix(in srgb,var(--vr-high) 16%,transparent);color:var(--vr-high)}
+  .vr-chip[data-sev="med"]{background:color-mix(in srgb,var(--vr-med) 18%,transparent);color:var(--vr-med)}
+  .vr-chip[data-sev="low"]{background:color-mix(in srgb,var(--vr-low) 16%,transparent);color:var(--vr-low)}
+  .vr-chip[data-sev="ok"]{background:color-mix(in srgb,var(--vr-ok) 16%,transparent);color:var(--vr-ok)}
+  .vr-explain{margin:8px 0 0;color:var(--vr-text)}
+  .vr-evidence{margin:10px 0 0;font-family:var(--vr-mono);font-size:.82rem;background:var(--vr-surface-2);
+    border:1px solid var(--vr-border);border-radius:8px;padding:10px 12px;overflow-x:auto;white-space:pre}
+  .vr-scope{margin-top:8px;font-size:.8rem;color:var(--vr-muted)}
+  .vr-scope b{color:var(--vr-text)}
+
+  /* ---- top-N priority list ---- */
+  .vr-topn{background:var(--vr-surface);border:1px solid var(--vr-border);border-radius:var(--vr-radius);
+    padding:8px 6px;box-shadow:var(--vr-shadow)}
+  .vr-topn-row{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-bottom:1px solid var(--vr-border)}
+  .vr-topn-row:last-child{border-bottom:none}
+  .vr-topn-rank{font-weight:800;color:var(--vr-faint);min-width:1.4em}
+  .vr-topn-body{min-width:0}
+  .vr-topn-body a{color:var(--vr-accent);text-decoration:none}
+
+  /* ---- charts (injected inline svg) + drilldown ---- */
+  .vr-figure{margin:12px 0 0}
+  .vr-figure svg{max-width:100%;height:auto;display:block}
+  .vr-figcaption{font-size:.78rem;color:var(--vr-muted);margin-top:6px}
+  .vr-scroll{overflow-x:auto}
+  details.vr-drill{margin:12px 0;border:1px solid var(--vr-border);border-radius:var(--vr-radius);
+    background:var(--vr-surface);box-shadow:var(--vr-shadow)}
+  details.vr-drill > summary{cursor:pointer;padding:12px 16px;font-weight:600;list-style:none}
+  details.vr-drill > summary::-webkit-details-marker{display:none}
+  details.vr-drill > summary::before{content:"▸ ";color:var(--vr-faint)}
+  details.vr-drill[open] > summary::before{content:"▾ "}
+  details.vr-drill > .vr-drill-body{padding:0 16px 14px}
+
+  /* ============ review overlay (only when data-review="on") ============ */
+  html[data-review="off"] .vr-toolbar,
+  html[data-review="off"] .vr-gutter,
+  html[data-review="off"] .vr-sheet-btn{display:none !important}
+
+  .vr-toolbar{position:sticky;top:0;z-index:1000;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+    justify-content:space-between;padding:8px 24px;background:color-mix(in srgb,var(--vr-surface) 92%,transparent);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--vr-border);font-size:.82rem}
+  .vr-toolbar-left{display:flex;gap:10px;align-items:center;color:var(--vr-muted);flex-wrap:wrap}
+  .vr-toolbar-left strong{color:var(--vr-text)}
+  .vr-tb-actions{display:flex;gap:8px;align-items:center}
+  .vr-btn{border:1px solid var(--vr-border);background:var(--vr-surface);color:var(--vr-text);
+    font:600 .78rem/1 var(--vr-font);padding:7px 12px;border-radius:8px;cursor:pointer}
+  .vr-btn:hover{background:var(--vr-surface-2)}
+  .vr-btn-primary{background:var(--vr-accent);color:var(--vr-accent-fg);border-color:var(--vr-accent)}
+  .vr-btn-danger{border-color:var(--vr-crit);color:var(--vr-crit)}
+  .vr-count{background:var(--vr-crit);color:#fff;font-size:.68rem;font-weight:700;border-radius:999px;
+    padding:1px 7px;min-width:18px;text-align:center}
+
+  /* anchor affordance: subtle marker on commentable elements when review is on */
+  html[data-review="on"] [data-cm-anchor]{position:relative}
+  html[data-review="on"] [data-cm-anchor].vr-has-comment{box-shadow:-3px 0 0 var(--vr-accent)}
+  html[data-review="on"] [data-cm-anchor]:hover{cursor:text}
+
+  /* margin cards live in the gutter column */
+  .vr-gutter{position:absolute;inset:0;pointer-events:none}
+  .vr-card{position:absolute;left:0;width:100%;pointer-events:auto;background:var(--vr-surface);
+    border:1px solid var(--vr-border);border-radius:10px;box-shadow:var(--vr-shadow);padding:10px 12px;
+    font-size:.84rem;transition:top .12s ease, box-shadow .12s ease}
+  .vr-card.vr-card-active{box-shadow:var(--vr-shadow-lg);border-color:var(--vr-accent)}
+  .vr-card-top{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+  .vr-card-num{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+    border-radius:50%;background:var(--vr-accent);color:var(--vr-accent-fg);font-size:.66rem;font-weight:700}
+  .vr-card-section{font-size:.66rem;text-transform:uppercase;letter-spacing:.04em;color:var(--vr-faint);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+  .vr-status{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;
+    padding:1px 6px;border-radius:999px;cursor:pointer}
+  .vr-status[data-s="needs_agent_review"]{background:color-mix(in srgb,var(--vr-high) 18%,transparent);color:var(--vr-high)}
+  .vr-status[data-s="needs_user_reply"]{background:color-mix(in srgb,var(--vr-low) 18%,transparent);color:var(--vr-low)}
+  .vr-status[data-s="resolved"]{background:color-mix(in srgb,var(--vr-ok) 18%,transparent);color:var(--vr-ok)}
+  .vr-card-quote{font-size:.72rem;color:var(--vr-faint);border-left:2px solid var(--vr-border);
+    padding-left:6px;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vr-card-text{white-space:pre-wrap;word-break:break-word}
+  .vr-reply{margin-top:6px;padding-top:6px;border-top:1px dashed var(--vr-border);white-space:pre-wrap}
+  .vr-reply-who{font-size:.66rem;font-weight:700;color:var(--vr-muted)}
+  .vr-card-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .vr-card-actions button{border:1px solid var(--vr-border);background:transparent;color:var(--vr-muted);
+    font:600 .68rem/1 var(--vr-font);padding:4px 8px;border-radius:6px;cursor:pointer}
+  .vr-card-actions button:hover{background:var(--vr-surface-2);color:var(--vr-text)}
+  .vr-card textarea{width:100%;min-height:64px;border:1px solid var(--vr-border);border-radius:8px;
+    padding:8px;font:inherit;font-size:.82rem;background:var(--vr-bg);color:var(--vr-text);resize:vertical}
+  .vr-card textarea:focus{outline:none;border-color:var(--vr-accent)}
+
+  /* narrow-screen bottom sheet fallback */
+  .vr-sheet-btn{position:fixed;right:16px;bottom:16px;z-index:1000;display:none;
+    border:none;border-radius:999px;background:var(--vr-accent);color:var(--vr-accent-fg);
+    font:700 .8rem/1 var(--vr-font);padding:12px 16px;box-shadow:var(--vr-shadow-lg);cursor:pointer}
+  .vr-sheet{position:fixed;left:0;right:0;bottom:0;max-height:70vh;overflow-y:auto;z-index:1001;
+    background:var(--vr-surface);border-top:1px solid var(--vr-border);border-radius:16px 16px 0 0;
+    box-shadow:var(--vr-shadow-lg);padding:16px 16px 24px;transform:translateY(101%);transition:transform .2s ease}
+  html.vr-sheet-open .vr-sheet{transform:translateY(0)}
+  .vr-sheet .vr-card{position:static;width:auto;margin-bottom:10px}
+  @media (max-width:1100px){
+    html[data-review="on"] .vr-sheet-btn{display:block}
+  }
+  @media print{.vr-toolbar,.vr-gutter,.vr-sheet,.vr-sheet-btn{display:none !important}
+    .vr-shell{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- Review toolbar (hidden entirely when data-review="off") -->
+<div class="vr-toolbar">
+  <div class="vr-toolbar-left">
+    <strong>Review mode</strong>
+    <span>click any block to comment</span>
+    <span class="vr-count" id="vr-count" style="display:none">0</span>
+  </div>
+  <div class="vr-tb-actions">
+    <button class="vr-btn" id="vr-theme">Theme</button>
+    <button class="vr-btn vr-btn-danger" id="vr-clear">Clear all</button>
+    <button class="vr-btn vr-btn-primary" id="vr-save">Save &amp; download</button>
+  </div>
+</div>
+
+<div class="vr-shell">
+  <main class="vr-main" id="vr-content">
+
+    <header class="vr-head">
+      <div class="vr-eyebrow">{{EYEBROW}}</div>
+      <h1 class="vr-title">{{REPORT_TITLE}}</h1>
+      <p class="vr-subtitle">{{SUBTITLE}}</p>
+      <div class="vr-meta">{{META}}</div>
+    </header>
+
+    <!-- REPORT_BODY_START -->
+{{REPORT_BODY}}
+    <!-- REPORT_BODY_END -->
+
+  </main>
+  <div class="vr-gutter-col"><div class="vr-gutter" id="vr-gutter" aria-hidden="true"></div></div>
+</div>
+
+<button class="vr-sheet-btn" id="vr-sheet-btn">Comments <span id="vr-sheet-count">0</span></button>
+<div class="vr-sheet" id="vr-sheet"></div>
+
+<!-- Comments baked in here on "Save & download". Leave [] in the master copy. -->
+<script type="application/json" id="vr-seed">[]</script>
+
+<!-- brand/token overrides injected here (optional): a <style>:root{...}</style> block -->
+{{THEME_TOKENS}}
+
+<script>
+(function(){
+  'use strict';
+
+  /* Theme toggle works in every mode (read-only artifact too). */
+  var themeBtn=document.getElementById('vr-theme');
+  if(themeBtn){themeBtn.addEventListener('click',function(){
+    var r=document.documentElement;
+    var cur=r.getAttribute('data-theme');
+    var next = cur==='dark' ? 'light' : cur==='light' ? 'dark'
+      : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light':'dark');
+    r.setAttribute('data-theme', next);
+  });}
+
+  if(document.documentElement.getAttribute('data-review')!=='on') return;  /* read-only mode: stop here */
+
+  var SEED_ID='vr-seed';
+  var ANCHOR_SEL='.vr-item, .vr-topn-row, .vr-metric, .vr-section > h2, .vr-explain, .vr-evidence, .vr-drill-body p, figcaption.vr-figcaption';
+  var SECTION_SEL='.vr-section > h2';
+  var STATUSES=['needs_agent_review','needs_user_reply','resolved'];
+  /* Key the store to path AND a hash of the report body, so regenerating the
+     report in place (new body, empty seed) does not let stale comments reattach. */
+  var STORAGE_KEY='visual-report:'+(location.pathname.replace(/[^a-z0-9]+/gi,'-').toLowerCase())
+    +':'+(function(){var c=document.getElementById('vr-content');return c?hash((c.textContent||'').replace(/\s+/g,' ').trim().slice(0,4000)):'0';})();
+
+  function uid(){return 'c_'+Math.random().toString(36).slice(2,9)+'_'+Date.now().toString(36);}
+  function hash(str){var h=5381;for(var i=0;i<str.length;i++){h=((h<<5)+h+str.charCodeAt(i))|0;}return (h>>>0).toString(36);}
+  function esc(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+
+  /* ---- content-hash anchors: stable across regeneration, unlike positional ids ---- */
+  function assignAnchors(){
+    var els=document.querySelectorAll(ANCHOR_SEL), seen={};
+    for(var i=0;i<els.length;i++){
+      var el=els[i];
+      if(el.closest('.vr-toolbar,.vr-gutter,.vr-sheet')) continue;
+      if(el.hasAttribute('data-cm-anchor')) continue;
+      var base='h'+hash((el.textContent||'').trim().slice(0,120));
+      var id=base, n=1; while(seen[id]){id=base+'_'+(n++);} seen[id]=1;
+      el.setAttribute('data-cm-anchor', id);
+    }
+  }
+  function anchorEl(id){return document.querySelector('[data-cm-anchor="'+CSS.escape(id)+'"]');}
+
+  function sectionOf(el){
+    var heads=document.querySelectorAll(SECTION_SEL), best=null;
+    for(var i=0;i<heads.length;i++){
+      if(heads[i].compareDocumentPosition(el)&Node.DOCUMENT_POSITION_FOLLOWING) best=heads[i]; else break;
+    }
+    return best?best.textContent.replace(/^\s*\d+[.)]?\s*/,'').trim():'';
+  }
+
+  /* ---- storage: baked seed + localStorage working copy, reconciled by fingerprint ---- */
+  function readSeed(){try{var el=document.getElementById(SEED_ID);var d=JSON.parse(el.textContent||'[]');return Array.isArray(d)?d:[];}catch(e){return [];}}
+  function fp(str){var h=5381;for(var i=0;i<str.length;i++){h=((h<<5)+h+str.charCodeAt(i))|0;}return 'f'+(h>>>0).toString(36)+'_'+str.length;}
+  function saveLocal(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify({seed:seedPrint,comments:comments}));}catch(e){}}
+
+  assignAnchors();
+  var seeded=readSeed();
+  var seedPrint=fp(JSON.stringify(seeded));
+  var comments;
+  try{var st=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
+    comments=(st&&st.seed===seedPrint&&Array.isArray(st.comments))?st.comments:seeded.slice();
+  }catch(e){comments=seeded.slice();}
+  comments=comments.filter(function(c){return c&&c.anchor&&anchorEl(c.anchor);});
+  comments.forEach(function(c){if(!c.status)c.status='needs_agent_review';if(!Array.isArray(c.replies))c.replies=[];});
+
+  var editing=null;   /* comment id being edited/created inline */
+  var creatingFor=null;
+
+  function ordered(){
+    return comments.slice().sort(function(a,b){
+      var ea=anchorEl(a.anchor),eb=anchorEl(b.anchor);
+      if(!ea||!eb)return 0; if(ea===eb)return 0;
+      var p=ea.compareDocumentPosition(eb);
+      return (p&Node.DOCUMENT_POSITION_FOLLOWING)?-1:(p&Node.DOCUMENT_POSITION_PRECEDING)?1:0;
+    });
+  }
+
+  var gutter=document.getElementById('vr-gutter');
+  var sheet=document.getElementById('vr-sheet');
+
+  function cardMarkup(c,i){
+    var next=STATUSES[(STATUSES.indexOf(c.status)+1)%STATUSES.length];
+    var replies=(c.replies||[]).map(function(r){
+      return '<div class="vr-reply"><span class="vr-reply-who">'+esc(r.author||'reply')+'</span> '+esc(r.text)+'</div>';
+    }).join('');
+    var body = editing===c.id
+      ? '<textarea class="vr-edit">'+esc(c.text)+'</textarea>'+
+        '<div class="vr-card-actions"><button data-a="save">Save</button><button data-a="cancel">Cancel</button></div>'
+      : '<div class="vr-card-text">'+esc(c.text)+'</div>'+replies+
+        '<div class="vr-card-actions">'+
+          '<button data-a="reply">Reply</button><button data-a="edit">Edit</button>'+
+          '<button data-a="del">Delete</button></div>';
+    return '<div class="vr-card" data-id="'+c.id+'" data-anchor="'+esc(c.anchor)+'">'+
+      '<div class="vr-card-top"><span class="vr-card-num">'+(i+1)+'</span>'+
+      '<span class="vr-card-section">'+esc(c.section||'')+'</span>'+
+      '<span class="vr-status" data-s="'+c.status+'" data-next="'+next+'" title="click to change status">'+
+        c.status.replace(/_/g,' ')+'</span></div>'+
+      (c.quote?'<div class="vr-card-quote">'+esc(c.quote)+'</div>':'')+body+'</div>';
+  }
+
+  function render(){
+    document.querySelectorAll('.vr-has-comment').forEach(function(e){e.classList.remove('vr-has-comment');});
+    var list=ordered();
+    /* mark anchored elements that carry a comment */
+    list.forEach(function(c){var el=anchorEl(c.anchor); if(el)el.classList.add('vr-has-comment');});
+
+    /* gutter cards, positioned at their anchor top with downward de-collision */
+    gutter.innerHTML=list.map(cardMarkup).join('');
+    if(creatingFor) gutter.insertAdjacentHTML('beforeend', newCardMarkup());
+    sheet.innerHTML='<div style="font-weight:700;margin-bottom:10px">Comments ('+list.length+')</div>'+
+      list.map(cardMarkup).join('') + (creatingFor?newCardMarkup():'');
+
+    positionCards();
+    wireCards(gutter); wireCards(sheet);
+    var n=comments.length, badge=document.getElementById('vr-count');
+    if(badge){badge.style.display=n?'':'none';badge.textContent=n;}
+    document.getElementById('vr-sheet-count').textContent=n;
+  }
+
+  function newCardMarkup(){
+    return '<div class="vr-card vr-card-active" data-new="1" data-anchor="'+esc(creatingFor.anchor)+'">'+
+      '<div class="vr-card-top"><span class="vr-card-num">+</span>'+
+      '<span class="vr-card-section">'+esc(creatingFor.section||'')+'</span></div>'+
+      (creatingFor.quote?'<div class="vr-card-quote">'+esc(creatingFor.quote)+'</div>':'')+
+      '<textarea class="vr-edit" placeholder="Your comment..."></textarea>'+
+      '<div class="vr-card-actions"><button data-a="create">Save</button><button data-a="createcancel">Cancel</button></div></div>';
+  }
+
+  function positionCards(){
+    if(window.innerWidth<=1100) return;    /* sheet mode: static flow, no positioning */
+    var contentTop=document.getElementById('vr-content').getBoundingClientRect().top+window.scrollY;
+    var used=0;
+    var cards=gutter.querySelectorAll('.vr-card');
+    cards.forEach(function(card){
+      var id=card.getAttribute('data-anchor');
+      var el=anchorEl(id);
+      var top= el ? (el.getBoundingClientRect().top+window.scrollY - contentTop) : used;
+      top=Math.max(top, used);
+      card.style.top=top+'px';
+      used = top + card.offsetHeight + 10;   /* de-collision: never overlap the previous */
+    });
+  }
+
+  function wireCards(root){
+    root.querySelectorAll('.vr-card').forEach(function(card){
+      var id=card.getAttribute('data-id');
+      card.addEventListener('click', function(ev){
+        var a=ev.target.getAttribute && ev.target.getAttribute('data-a');
+        if(ev.target.classList && ev.target.classList.contains('vr-status')){
+          var c=byId(id); if(c){c.status=ev.target.getAttribute('data-next');c.updatedAt=now();saveLocal();render();}
+          return;
+        }
+        if(!a){ focusAnchor(card.getAttribute('data-anchor')); return; }
+        ev.stopPropagation();
+        if(a==='edit'){editing=id;render();}
+        else if(a==='cancel'){editing=null;render();}
+        else if(a==='save'){var t=card.querySelector('.vr-edit').value.trim();var c=byId(id);
+          if(c&&t){c.text=t;c.updatedAt=now();} editing=null;saveLocal();render();}
+        else if(a==='del'){comments=comments.filter(function(x){return x.id!==id;});saveLocal();render();}
+        else if(a==='reply'){var c=byId(id);if(c){c.replies.push({author:'reviewer',text:'',at:now()});editing=null;
+          replyEdit(id,c.replies.length-1);}}
+        else if(a==='create'){commitNew(card.querySelector('.vr-edit').value.trim());}
+        else if(a==='createcancel'){creatingFor=null;render();}
+      });
+    });
+  }
+
+  function replyEdit(id,idx){
+    /* simplest reply UX: prompt-free inline, reuse edit box on the reply slot */
+    var c=byId(id); if(!c)return;
+    var txt=window.prompt('Reply:'); /* one line; keeps the engine small. Long threads are rare in review. */
+    if(txt&&txt.trim()){c.replies[idx].text=txt.trim();c.status='needs_agent_review';} else {c.replies.splice(idx,1);}
+    saveLocal();render();
+  }
+
+  function commitNew(text){
+    if(text){
+      var el=anchorEl(creatingFor.anchor);
+      comments.push({id:uid(),anchor:creatingFor.anchor,section:creatingFor.section,
+        quote:creatingFor.quote,text:text,status:'needs_agent_review',replies:[],createdAt:now()});
+    }
+    creatingFor=null;saveLocal();render();
+  }
+
+  function byId(id){return comments.filter(function(c){return c.id===id;})[0];}
+  function now(){return new Date().toISOString();}
+  function focusAnchor(id){var el=anchorEl(id);if(!el)return;
+    window.scrollTo({top:Math.max(el.getBoundingClientRect().top+window.scrollY-120,0),behavior:'smooth'});
+    el.animate?el.animate([{background:'color-mix(in srgb,var(--vr-accent) 18%,transparent)'},{background:'transparent'}],{duration:800}):0;
+  }
+
+  /* ---- click a block to comment ---- */
+  document.getElementById('vr-content').addEventListener('click', function(ev){
+    if(ev.target.closest('a,button,summary,input,textarea,select,label')) return;
+    var el=ev.target.closest('[data-cm-anchor]');
+    if(!el) return;
+    creatingFor={anchor:el.getAttribute('data-cm-anchor'),section:sectionOf(el),
+      quote:(el.textContent||'').trim().slice(0,80)};
+    editing=null; render();
+    var box=(window.innerWidth<=1100?sheet:gutter).querySelector('[data-new] .vr-edit');
+    if(window.innerWidth<=1100) document.documentElement.classList.add('vr-sheet-open');
+    if(box) box.focus();
+  });
+
+  /* ---- toolbar + sheet ---- */
+  var reposition; window.addEventListener('scroll',function(){cancelAnimationFrame(reposition);reposition=requestAnimationFrame(positionCards);},{passive:true});
+  window.addEventListener('resize',function(){cancelAnimationFrame(reposition);reposition=requestAnimationFrame(function(){render();});});
+  document.getElementById('vr-sheet-btn').addEventListener('click',function(){document.documentElement.classList.toggle('vr-sheet-open');});
+  document.getElementById('vr-clear').addEventListener('click',function(){
+    if(!comments.length)return; if(!confirm('Delete all '+comments.length+' comments?'))return;
+    comments=[];editing=null;creatingFor=null;saveLocal();render();});
+
+  function buildAnnotatedHtml(){
+    var clone=document.documentElement.cloneNode(true);
+    clone.querySelectorAll('.vr-card,.vr-gutter > *').forEach(function(n){n.remove();});
+    clone.classList.remove('vr-sheet-open');
+    var g=clone.querySelector('#vr-gutter'); if(g)g.innerHTML='';
+    var sh=clone.querySelector('#vr-sheet'); if(sh)sh.innerHTML='';
+    var seed=clone.querySelector('#'+SEED_ID);
+    /* Escape every "<" so a comment that contains a closing script tag cannot
+       terminate the seed block (that would drop every comment and inject live
+       markup on reopen). "<" is valid JSON, so JSON.parse restores it as-is. */
+    seed.textContent=JSON.stringify(ordered(),null,2).replace(/</g,'\\u003c');
+    return '<!doctype html>\n'+clone.outerHTML;
+  }
+  document.getElementById('vr-save').addEventListener('click',function(){
+    var blob=new Blob([buildAnnotatedHtml()],{type:'text/html'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download=(location.pathname.split('/').pop()||'report.html').replace(/\.html?$/i,'')+'-review.html';
+    document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(a.href);
+  });
+
+  /* A drilldown opening/closing changes anchor offsets. Reposition the cards. */
+  document.querySelectorAll('details.vr-drill').forEach(function(d){
+    d.addEventListener('toggle',function(){requestAnimationFrame(positionCards);});
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

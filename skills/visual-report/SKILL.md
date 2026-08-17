@@ -1,0 +1,83 @@
+---
+name: visual-report
+disable-model-invocation: true
+description: Use when the user wants a polished, visual HTML report from data or findings: "visual report", "make a report", "HTML report", "report as an artifact", "dashboard from this data", "turn this into a report", "nice report", "визуальный отчёт", "сделай отчёт", "отчёт HTML", "Bericht als HTML", or any near-equivalent. Turns almost any input (findings, metrics, logs, a markdown doc, JSON) into one self-contained HTML report: metric cards, prioritized items, plain-English explanations, and charts that earn their place. Two delivery modes: a shareable Artifact link, or a local file with a click-to-comment review layer. Triggers on '/lodestar:visual-report'. For a chat-only, non-technical PM summary use '/lodestar:pm-report' instead.
+---
+
+# Visual Report
+
+Turn input data into one clean, self-contained HTML report that reads well and is not overloaded: a headline, metric cards, a "what matters first" list, sections of items each explained in plain language, charts only where they add information, and detail folded into drilldowns.
+
+This skill **reasons about the report** before it renders one. The template is the easy part. The value is deciding audience, structure, what to cut, which chart fits, and how to balance technical detail with plain English. Do that thinking first, every time.
+
+Companion, not replacement: `/lodestar:pm-report` is a chat-only, non-technical summary for a project manager. This skill produces a visual HTML artifact for a mixed technical audience. If the user wants a Slack-pasteable plain summary, offer `pm-report` instead.
+
+## When to use
+
+- "Make a visual report / dashboard from this data / these findings."
+- Aggregating results (audit reports, test runs, metrics, a research doc) into one readable page.
+- A deliverable someone will read or a stakeholder will review and comment on.
+
+## When NOT to use
+
+- A quick chat answer or a plain-text PM summary → `/lodestar:pm-report`.
+- A live app dashboard wired to changing data → that is an app, not this skill.
+- Design exploration of a UI element → `/lodestar:design-variations`.
+
+## Step 1: Ask the delivery mode (always, before building)
+
+Ask the user which mode, in one question. The two modes come from the same template; the choice changes packaging and whether the review layer is on.
+
+- **Artifact**: published page + shareable link, read-only. Charts and layout only, no comment overlay. Best for "share this / send it round to read." Note: a published Artifact sandbox blocks page-initiated downloads, so the review round-trip does not work here.
+- **Local file**: one self-contained `.html` on disk with the click-to-comment margin cards enabled. Best for "I want to review this and send comments back." The reviewer opens it, clicks any block to comment, hits **Save & download**, and sends the baked file back; you read the comments from its `#vr-seed` block.
+
+Do not guess the mode. Ask.
+
+## Step 2: Reason about the report, then show a structure plan
+
+Read `references/reasoning.md` and follow it. In short:
+
+1. **Audience and purpose first.** Who reads this and what decision it drives. This sets the technical-vs-plain-English balance. One report can carry both layers: a plain summary on top, technical detail beside it or in a drilldown.
+2. **Cut noise, keep essentials.** Decide what to leave out. Merge repeats: the same issue in many places is one item that lists its scope, not many items (dedup-with-scope-merge).
+3. **Charts that earn their place.** Load the built-in `dataviz` skill to pick the chart type from the data shape and to apply its "a chart must earn its place" rule. If a sentence says it better, do not draw a chart.
+4. **Plain-English explanation on every item.** What it means and why it matters, jargon translated, technical detail kept beside it, never instead of it.
+5. **Redaction pass** before any shareable output: secrets to `[REDACTED:<kind>]`, absolute home paths to `~`.
+
+For any non-trivial input, **emit a short structure plan and show it to the user before rendering**: audience, the sections you will include, which charts, and what you are cutting. This is the checkpoint that stops the report from missing important detail or over-weighting the wrong thing. Trivial input can skip straight to rendering.
+
+## Step 3: Build from the template
+
+1. Copy `assets/report-template.html`. Fill the `{{...}}` slots; compose the body from the blocks in `assets/section-example.html` (metric cards, top-N, sections, items, figures, drilldowns). Do not restyle. The classes are already themed.
+2. Set `data-review="on"` for local-file mode, `data-review="off"` for Artifact mode (via the `{{REVIEW_MODE}}` slot).
+3. Charts: inline `<svg>` only, using the `--vr-cat-*` palette variables. No CDN, no `<script src>`, no web fonts, no remote images. In Artifact mode a `<pre class="mermaid">` diagram also renders natively; in local-file mode use inline SVG so it works offline.
+4. **Load `artifact-design` before writing an Artifact** (its own contract requires this) to calibrate layout and the "not overloaded" balance. Use `artifact-diagramming` for any diagram.
+5. Deliver: Artifact mode → publish with the Artifact tool and hand over the link. Local-file mode → write the `.html` to disk and tell the user the path and how to open it.
+
+The comment engine, seed schema, and gotchas are documented in `references/comment-layer.md`.
+
+## Hard rules
+
+1. **Self-contained, zero external hosts.** Inline all CSS. No CDN, `<link rel=stylesheet>`, `@import url()`, web fonts, remote images, or `<script src>`. This is what lets the same file render as a local file and as an Artifact.
+2. **Ask the delivery mode first.** Never assume Artifact vs local file.
+3. **Charts are inline SVG and must earn their place.** Delegate the choice to `dataviz`; do not chart what a sentence says better.
+4. **Reason then render.** Show the structure plan for non-trivial input before building.
+5. **Redact before sharing.** Secrets and absolute home paths never leave in clear text.
+6. **Never invent data.** If the input lacks a number, say so in the report; do not fabricate a metric or a chart value.
+7. **Read-only on the source.** This skill reads input and writes only the report file or Artifact.
+
+## Bundled resources
+
+Loaded as needed:
+- `assets/report-template.html`, the self-contained shell: themed CSS, review engine, `{{...}}` slots. Copy and fill.
+- `assets/section-example.html`: the body markup contract (metric cards, top-N, item, figure, drilldown).
+- `references/reasoning.md`: the audience → plan → cut → explain → chart procedure and the structure-plan checkpoint format.
+- `references/report-shapes.md`: the information-architecture catalog and when each shape fits.
+- `references/comment-layer.md`: the review engine, `#vr-seed` schema, packaging, responsive behavior, gotchas.
+
+## Companion skills
+
+Lodestar offers other skills, it does not run them silently.
+- **`dataviz`** (built-in): load it to choose and spec charts. First stop for any figure.
+- **`artifact-design`** (built-in): load it before publishing an Artifact, for layout and restraint.
+- **`artifact-diagramming`** (built-in): for diagrams.
+- **`/lodestar:pm-report`**: the plain-text, chat-only PM summary. Offer it when the user wants text, not a visual artifact.

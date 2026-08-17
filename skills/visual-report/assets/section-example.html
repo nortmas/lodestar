@@ -1,0 +1,79 @@
+<!-- ============================================================================
+     VISUAL-REPORT BODY CONTRACT: canonical markup for {{REPORT_BODY}}
+     This is the vocabulary the model emits into report-template.html. Every class
+     here is already styled by the template. Do NOT restyle; compose these blocks.
+     Charts are inline <svg> only (no CDN). See references/report-shapes.md.
+     ============================================================================ -->
+
+<!-- 1. METRIC CARDS: top band, big numbers, immediate read. tone: crit|high|med|ok|(none) -->
+<div class="vr-metrics">
+  <div class="vr-metric" data-tone="crit"><div class="vr-metric-value">3</div><div class="vr-metric-label">Critical findings</div></div>
+  <div class="vr-metric" data-tone="high"><div class="vr-metric-value">11</div><div class="vr-metric-label">High</div></div>
+  <div class="vr-metric"><div class="vr-metric-value">42</div><div class="vr-metric-label">Total findings</div></div>
+  <div class="vr-metric" data-tone="ok"><div class="vr-metric-value">96%</div><div class="vr-metric-label">Rules with a server check</div></div>
+</div>
+
+<!-- 2. TOP-N PRIORITIES: ranked attention queue BEFORE the detail sections -->
+<section class="vr-section">
+  <h2>What to fix first</h2>
+  <p class="vr-section-note">The five items with the highest impact-over-effort. Full detail below.</p>
+  <div class="vr-topn">
+    <div class="vr-topn-row"><span class="vr-topn-rank">1</span><div class="vr-topn-body">
+      <strong>Stripe webhook route has no signature check.</strong> Anyone who finds the URL can post fake payment events. One-line middleware fix.
+    </div></div>
+    <div class="vr-topn-row"><span class="vr-topn-rank">2</span><div class="vr-topn-body">
+      <strong>Legacy plugin key compared with <code>!==</code>.</strong> Timing-leakable. Swap to <code>hash_equals</code>.
+    </div></div>
+  </div>
+</section>
+
+<!-- 3. A DETAIL SECTION with items. Each item: title + chips, plain-English explain,
+        evidence, optional scope (dedup-with-scope-merge), optional inline-svg chart. -->
+<section class="vr-section">
+  <h2>Authentication</h2>
+  <p class="vr-section-note">How credentials are checked on state-changing routes.</p>
+
+  <!-- item severity drives the left border + chip colour: crit|high|med|low|ok -->
+  <article class="vr-item" data-sev="high">
+    <div class="vr-item-head">
+      <h3 class="vr-item-title">Google SSO logs a user in on email match alone</h3>
+      <span class="vr-chip" data-sev="high">High</span>
+      <span class="vr-chip">CWE-287</span>
+      <span class="vr-chip">GoogleAuthController</span>
+    </div>
+    <!-- plain-English first: what it means and why it matters, no jargon -->
+    <p class="vr-explain">If someone signs in with Google and the email matches an existing account, they are let in
+      without checking that Google actually verified that email. An attacker with an unverified Google address that
+      happens to match a real user's email can take over the account.</p>
+    <!-- technical detail beside the explanation, not instead of it -->
+    <pre class="vr-evidence">app/Modules/Web/Auth/Controllers/GoogleAuthController.php:41
+  $user = User::where('email', $google->email)->first();   // no email_verified check</pre>
+    <!-- dedup-with-scope-merge: one entry, list the scope instead of repeating -->
+    <p class="vr-scope"><b>Also affects:</b> the Microsoft and Zendesk OAuth callbacks share this handler.</p>
+  </article>
+
+  <!-- 4. A CHART that earns its place. Inline SVG only. Uses --vr-cat-* palette vars.
+          Ask the dataviz skill which chart fits; render it as SVG here. -->
+  <figure class="vr-figure">
+    <div class="vr-scroll">
+      <svg viewBox="0 0 320 120" width="320" height="120" role="img" aria-label="Findings by severity: 3 critical, 11 high, 18 medium, 10 low">
+        <g font-family="var(--vr-font)" font-size="11" fill="var(--vr-muted)">
+          <rect x="10"  y="20" width="18" height="80" fill="var(--vr-cat-4)"></rect>
+          <rect x="48"  y="44" width="18" height="56" fill="var(--vr-cat-6)"></rect>
+          <rect x="86"  y="8"  width="18" height="92" fill="var(--vr-cat-1)"></rect>
+          <rect x="124" y="52" width="18" height="48" fill="var(--vr-cat-5)"></rect>
+          <line x1="8" y1="100" x2="200" y2="100" stroke="var(--vr-border)"></line>
+        </g>
+      </svg>
+    </div>
+    <figcaption class="vr-figcaption">Findings by severity (illustrative). A four-bar count reads faster than a table here.</figcaption>
+  </figure>
+
+  <!-- 5. DRILLDOWN: deep context folded away so the main flow stays scannable -->
+  <details class="vr-drill">
+    <summary>All 11 authentication findings (full list)</summary>
+    <div class="vr-drill-body">
+      <p>One row per finding with file:line and verdict. Kept collapsed so the section above stays readable.</p>
+    </div>
+  </details>
+</section>
