@@ -47,13 +47,26 @@ For any non-trivial input, **emit a short structure plan and show it to the user
 
 ## Step 3: Build from the template
 
-1. Copy `assets/report-template.html`. Fill the `{{...}}` slots; compose the body from the blocks in `assets/section-example.html` (metric cards, top-N, sections, items, figures, drilldowns). Do not restyle. The classes are already themed.
-2. Set `data-review="on"` for local-file mode, `data-review="off"` for Artifact mode (via the `{{REVIEW_MODE}}` slot).
-3. Charts: inline `<svg>` only, using the `--vr-cat-*` palette variables. No CDN, no `<script src>`, no web fonts, no remote images. In Artifact mode a `<pre class="mermaid">` diagram also renders natively; in local-file mode use inline SVG so it works offline.
+1. Copy `assets/report-template.html`. Fill the `{{...}}` slots; compose the body from the blocks in `assets/section-example.html` (metric cards, top-N, sections, items, figures, drilldowns). Do not restyle. The classes are already themed, and the template ships thin theme-aware scrollbars, so code blocks and wide figures scroll cleanly.
+2. Charts: inline `<svg>` only, using the `--vr-cat-*` palette variables. No CDN, no `<script src>`, no web fonts, no remote images. In Artifact mode a `<pre class="mermaid">` diagram also renders natively; in local-file mode use inline SVG so it works offline.
+3. Many sections? Do NOT emit a flat row of buttons that wraps to a second line. Take a pattern from `assets/nav-example.html`: a two-level top nav for a handful of pages, or a left sidebar (with per-page count badges) past about six pages. Each page is a `<section class="vr-tabpage" data-tab="ID">` and the script shows one at a time.
 4. **Load `artifact-design` before writing an Artifact** (its own contract requires this) to calibrate layout and the "not overloaded" balance. Use `artifact-diagramming` for any diagram.
-5. Deliver: Artifact mode → publish with the Artifact tool and hand over the link. Local-file mode → write the `.html` to disk and tell the user the path and how to open it.
+5. Package for the chosen mode:
+   - **Local file**: write the full `report-template.html` document to disk with `data-review="on"` (via the `{{REVIEW_MODE}}` slot). The review layer and Save & download work from `file://`.
+   - **Artifact**: the Artifact tool wraps your file in its OWN `<!doctype>/<html>/<head>/<body>` and controls the theme, so publish a FRAGMENT, not a full document: a `<title>`, then the template's `<style>` block, then the body content, then the `<script>`s. Drop the `<!doctype>/<html>/<head>/<body>` wrappers and do not set `data-review` (the template centers when it is absent and the review engine stays off). Then publish with the Artifact tool and hand over the link.
 
 The comment engine, seed schema, and gotchas are documented in `references/comment-layer.md`.
+
+## Step 4: Clarity gate (read it back as a stranger)
+
+You are blind to your own ambiguity while writing, so run a distinct pass at the end: re-read the report as a skeptical first-time reader who knows nothing about the audit. For every number, label, chip, and chart axis, apply the reader-question test:
+
+- **Of what?** A count that is a subset must show its whole. Write `28 / 32`, never a bare `28`.
+- **What about the rest?** If `28 Confirmed` leaves 4 unexplained, name them in the label or a tooltip.
+- **What does this word mean?** No internal vocabulary as a bare label. `FAIL`, `PARTIAL`, `Confirmed`, `Std`, `Cos`, `Pass`, `Rules passing` are jargon: reword to plain English or explain in a tooltip.
+- **Which axis?** One row of tiles is ONE axis. Do not mix severity (Critical/High/...) with verdict (Confirmed/Likely) in the same row without labeling it.
+
+Any element that triggers a question is unclear. Fix it (add the denominator, reword, attach a tooltip) or cut it. Every non-obvious number or label carries a human tooltip via `data-tip="..."` (the template styles it on hover). Chart axes use full words, never abbreviations, and every chart mark carries a hover tooltip (SVG `<title>` or `data-tip`). Full detail and worked anti-examples are in `references/reasoning.md`.
 
 ## Hard rules
 
@@ -64,12 +77,15 @@ The comment engine, seed schema, and gotchas are documented in `references/comme
 5. **Redact before sharing.** Secrets and absolute home paths never leave in clear text.
 6. **Never invent data.** If the input lacks a number, say so in the report; do not fabricate a metric or a chart value.
 7. **Read-only on the source.** This skill reads input and writes only the report file or Artifact.
+8. **Multi-section reports navigate, they do not wrap.** Past a handful of pages use a tabbed or sidebar nav from `assets/nav-example.html`, never a flat button row that reflows onto a second line.
+9. **Nothing ships that raises a question.** A bare subset count, a jargon label, a mixed-axis tile row, or an abbreviated tooltip-less chart is a clarity defect. Run the Step 4 reader-question test and fix or cut before delivery. Non-obvious numbers and labels carry a `data-tip` tooltip.
 
 ## Bundled resources
 
 Loaded as needed:
 - `assets/report-template.html`, the self-contained shell: themed CSS, review engine, `{{...}}` slots. Copy and fill.
 - `assets/section-example.html`: the body markup contract (metric cards, top-N, item, figure, drilldown).
+- `assets/nav-example.html`: two navigation patterns (two-level top nav, left sidebar) for a multi-page or tabbed report, each with its switch script.
 - `references/reasoning.md`: the audience → plan → cut → explain → chart procedure and the structure-plan checkpoint format.
 - `references/report-shapes.md`: the information-architecture catalog and when each shape fits.
 - `references/comment-layer.md`: the review engine, `#vr-seed` schema, packaging, responsive behavior, gotchas.

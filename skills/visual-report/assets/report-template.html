@@ -69,8 +69,10 @@
     grid-template-columns:minmax(0,var(--vr-content-w)) var(--vr-gutter-w);gap:24px}
   .vr-main{min-width:0;padding:40px 0 120px}
   .vr-gutter-col{position:relative}
-  html[data-review="off"] .vr-shell{grid-template-columns:minmax(0,var(--vr-content-w));justify-content:center}
-  html[data-review="off"] .vr-gutter-col{display:none}
+  /* center + drop the gutter whenever review is not on, including a published
+     Artifact, where the tool controls <html> and sets no data-review attribute. */
+  html:not([data-review="on"]) .vr-shell{grid-template-columns:minmax(0,var(--vr-content-w));justify-content:center}
+  html:not([data-review="on"]) .vr-gutter-col{display:none}
   @media (max-width:1100px){
     .vr-shell{grid-template-columns:minmax(0,1fr);max-width:var(--vr-content-w)}
     .vr-gutter-col{display:none}     /* narrow: cards move to the bottom sheet */
@@ -134,6 +136,9 @@
   .vr-figure svg{max-width:100%;height:auto;display:block}
   .vr-figcaption{font-size:.78rem;color:var(--vr-muted);margin-top:6px}
   .vr-scroll{overflow-x:auto}
+  .vr-legend{display:flex;flex-wrap:wrap;gap:16px;padding:8px 2px 0}
+  .vr-leg-item{display:inline-flex;align-items:center;gap:6px;font-size:.76rem;color:var(--vr-muted)}
+  .vr-leg-sw{width:11px;height:11px;border-radius:3px;display:inline-block}
   details.vr-drill{margin:12px 0;border:1px solid var(--vr-border);border-radius:var(--vr-radius);
     background:var(--vr-surface);box-shadow:var(--vr-shadow)}
   details.vr-drill > summary{cursor:pointer;padding:12px 16px;font-weight:600;list-style:none}
@@ -142,10 +147,36 @@
   details.vr-drill[open] > summary::before{content:"▾ "}
   details.vr-drill > .vr-drill-body{padding:0 16px 14px}
 
+  /* ---- thin, theme-aware scrollbars (replace the chunky OS default) ---- */
+  :root{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--vr-muted) 45%,transparent) transparent}
+  .vr-evidence,.vr-scroll,.vr-drill-body,.vr-main,pre{scrollbar-width:thin;
+    scrollbar-color:color-mix(in srgb,var(--vr-muted) 45%,transparent) transparent}
+  *::-webkit-scrollbar{width:10px;height:10px}
+  *::-webkit-scrollbar-track{background:transparent}
+  *::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--vr-muted) 42%,transparent);
+    border-radius:999px;border:2px solid transparent;background-clip:padding-box}
+  *::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--vr-muted) 68%,transparent);
+    border:2px solid transparent;background-clip:padding-box}
+  *::-webkit-scrollbar-corner{background:transparent}
+
+  /* ---- hover tooltips: put a plain-language explanation on any non-obvious
+     number or label with data-tip="..." (metric tiles, chips, headers) ---- */
+  [data-tip]{position:relative}
+  [data-tip]:hover::after{content:attr(data-tip);position:absolute;left:0;top:calc(100% + 8px);z-index:120;
+    width:max-content;max-width:280px;white-space:normal;background:var(--vr-surface-2);color:var(--vr-text);
+    border:1px solid var(--vr-border-strong);font:500 .76rem/1.45 var(--vr-font);padding:8px 10px;border-radius:8px;box-shadow:var(--vr-shadow-lg);pointer-events:none}
+  [data-tip]:last-child:hover::after{left:auto;right:0}
+  .vr-metric[data-tip]{cursor:help}
+  /* cursor-following tooltip for SVG chart marks (same look, in-theme) */
+  .vr-tip{position:fixed;z-index:200;max-width:280px;background:var(--vr-surface-2);color:var(--vr-text);
+    border:1px solid var(--vr-border-strong);font:500 .78rem/1.45 var(--vr-font);padding:8px 10px;
+    border-radius:8px;box-shadow:var(--vr-shadow-lg);pointer-events:none}
+  svg [data-tip]{cursor:default}
+
   /* ============ review overlay (only when data-review="on") ============ */
-  html[data-review="off"] .vr-toolbar,
-  html[data-review="off"] .vr-gutter,
-  html[data-review="off"] .vr-sheet-btn{display:none !important}
+  html:not([data-review="on"]) .vr-toolbar,
+  html:not([data-review="on"]) .vr-gutter,
+  html:not([data-review="on"]) .vr-sheet-btn{display:none !important}
 
   .vr-toolbar{position:sticky;top:0;z-index:1000;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
     justify-content:space-between;padding:8px 24px;background:color-mix(in srgb,var(--vr-surface) 92%,transparent);
@@ -267,6 +298,23 @@
       : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light':'dark');
     r.setAttribute('data-theme', next);
   });}
+
+  /* Styled hover tooltip for SVG chart segments (CSS ::after cannot attach to SVG).
+     Put data-tip="plain sentence" on a <rect>/<path>; it follows the cursor and
+     matches the card tooltip look. Runs in every mode, including read-only. */
+  (function(){
+    var tip=document.createElement('div');tip.className='vr-tip';tip.style.display='none';
+    document.body.appendChild(tip);
+    function pos(e){var pad=14,w=tip.offsetWidth,h=tip.offsetHeight,x=e.clientX+pad,y=e.clientY+pad;
+      if(x+w>innerWidth-8)x=e.clientX-w-pad; if(y+h>innerHeight-8)y=e.clientY-h-pad;
+      tip.style.left=x+'px';tip.style.top=y+'px';}
+    function hit(t){return t&&t.closest?t.closest('svg [data-tip]'):null;}
+    document.addEventListener('pointerover',function(e){var el=hit(e.target);
+      if(el){tip.textContent=el.getAttribute('data-tip');tip.style.display='block';pos(e);}});
+    document.addEventListener('pointermove',function(e){if(tip.style.display==='none')return;
+      var el=hit(e.target); if(el)pos(e); else tip.style.display='none';});
+    document.addEventListener('pointerout',function(e){if(hit(e.target))tip.style.display='none';});
+  })();
 
   if(document.documentElement.getAttribute('data-review')!=='on') return;  /* read-only mode: stop here */
 

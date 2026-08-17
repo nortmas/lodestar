@@ -87,3 +87,29 @@ Do not pick the chart type here. Load the `dataviz` skill: it maps the data shap
 a chart and applies the "earn its place" rule. Every chart is inline `<svg>` using
 the `--vr-cat-*` palette vars, placed in a `.vr-figure` (wrap wide ones in
 `.vr-scroll`).
+
+For a category-by-severity breakdown (findings per service, per audit, per module),
+prefer a **horizontal stacked bar**: one row per category, segments by severity, a
+shared left baseline, the total at the end, and a full-word legend (`.vr-legend`)
+below. It aligns and reads better than vertical columns and scales to many rows.
+Give every segment a `data-tip="Label: N findings"` (full words, never `Crit`/`Std`/
+`Cos`); the template renders it as a styled, in-theme, cursor-following tooltip
+(SVG cannot use the CSS `::after` tooltip, so charts rely on this handler). If the
+metric tiles already carry the same numbers, one proportion bar is enough: do not
+also add a redundant column chart. See `assets/section-example.html`.
+
+## Navigation for a multi-page report
+
+One long scroll works up to a few sections. Past that, split the report into pages
+(one `<section class="vr-tabpage" data-tab="ID">` each) and give it a navigation,
+never a flat button row that wraps onto a second line. Two patterns, both in
+`assets/nav-example.html`:
+
+- **Two-level top nav** (primary pills + contextual sub-tabs). Good for a small,
+  two-axis set (for example service, then section). Compact vertically.
+- **Left sidebar** (grouped items with a per-page count badge, red when the page
+  carries a Critical). Better past about six pages: a vertical list never wraps and
+  the badges show weight at a glance. Collapses to a `<select>` jump on narrow screens.
+
+Keep a single Overview/dashboard page as the entry point and link into the other
+pages from it with `data-goto="<tab-id>"`.

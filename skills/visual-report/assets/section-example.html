@@ -5,12 +5,16 @@
      Charts are inline <svg> only (no CDN). See references/report-shapes.md.
      ============================================================================ -->
 
-<!-- 1. METRIC CARDS: top band, big numbers, immediate read. tone: crit|high|med|ok|(none) -->
+<!-- 1. METRIC CARDS: ONE axis (severity). Each tile has a data-tip (plain-language
+        hover). A subset count shows its whole ("28 / 42"), never a bare number, and
+        the tooltip names the remainder. Severity tiles sum to the total. Do NOT mix
+        a second axis (verdict) in without a denominator + tip. tone: crit|high|med|ok -->
 <div class="vr-metrics">
-  <div class="vr-metric" data-tone="crit"><div class="vr-metric-value">3</div><div class="vr-metric-label">Critical findings</div></div>
-  <div class="vr-metric" data-tone="high"><div class="vr-metric-value">11</div><div class="vr-metric-label">High</div></div>
-  <div class="vr-metric"><div class="vr-metric-value">42</div><div class="vr-metric-label">Total findings</div></div>
-  <div class="vr-metric" data-tone="ok"><div class="vr-metric-value">96%</div><div class="vr-metric-label">Rules with a server check</div></div>
+  <div class="vr-metric" data-tone="crit" data-tip="Highest-severity findings. Fix these first."><div class="vr-metric-value">3</div><div class="vr-metric-label">Critical</div></div>
+  <div class="vr-metric" data-tone="high" data-tip="High-severity findings."><div class="vr-metric-value">11</div><div class="vr-metric-label">High</div></div>
+  <div class="vr-metric" data-tone="med" data-tip="Medium-severity findings."><div class="vr-metric-value">18</div><div class="vr-metric-label">Medium</div></div>
+  <div class="vr-metric" data-tip="Lower-severity findings plus informational notes."><div class="vr-metric-value">10</div><div class="vr-metric-label">Low / Info</div></div>
+  <div class="vr-metric" data-tip="28 of 42 findings confirmed by an independent re-check. The other 14 are likely: they need runtime or environment access to confirm."><div class="vr-metric-value">28 / 42</div><div class="vr-metric-label">Confirmed</div></div>
 </div>
 
 <!-- 2. TOP-N PRIORITIES: ranked attention queue BEFORE the detail sections -->
@@ -52,21 +56,31 @@
     <p class="vr-scope"><b>Also affects:</b> the Microsoft and Zendesk OAuth callbacks share this handler.</p>
   </article>
 
-  <!-- 4. A CHART that earns its place. Inline SVG only. Uses --vr-cat-* palette vars.
-          Ask the dataviz skill which chart fits; render it as SVG here. -->
+  <!-- 4. A CHART that earns its place: ONE horizontal stacked bar by severity.
+          Prefer this over vertical columns (shared baseline, reads cleaner). Each
+          segment carries data-tip (styled hover, full words, no abbreviations); a
+          full-word legend sits below; the total is at the end. Inline SVG only,
+          severity vars. Ask the dataviz skill for the form. If the tiles above
+          already carry the same numbers, one proportion bar is enough; do not also
+          add a redundant column chart. -->
   <figure class="vr-figure">
     <div class="vr-scroll">
-      <svg viewBox="0 0 320 120" width="320" height="120" role="img" aria-label="Findings by severity: 3 critical, 11 high, 18 medium, 10 low">
-        <g font-family="var(--vr-font)" font-size="11" fill="var(--vr-muted)">
-          <rect x="10"  y="20" width="18" height="80" fill="var(--vr-cat-4)"></rect>
-          <rect x="48"  y="44" width="18" height="56" fill="var(--vr-cat-6)"></rect>
-          <rect x="86"  y="8"  width="18" height="92" fill="var(--vr-cat-1)"></rect>
-          <rect x="124" y="52" width="18" height="48" fill="var(--vr-cat-5)"></rect>
-          <line x1="8" y1="100" x2="200" y2="100" stroke="var(--vr-border)"></line>
-        </g>
+      <svg viewBox="0 0 470 50" width="470" height="50" role="img" aria-label="Severity mix: 3 critical, 11 high, 18 medium, 10 low or info, 42 total">
+        <rect x="8"   y="10" width="28"  height="30" rx="4" fill="var(--vr-crit)" data-tip="Critical: 3 findings"></rect>
+        <rect x="38"  y="10" width="108" height="30" rx="4" fill="var(--vr-high)" data-tip="High: 11 findings"></rect>
+        <rect x="148" y="10" width="178" height="30" rx="4" fill="var(--vr-med)"  data-tip="Medium: 18 findings"></rect>
+        <rect x="328" y="10" width="98"  height="30" rx="4" fill="var(--vr-low)"  data-tip="Low / Info: 10 findings"></rect>
+        <text x="436" y="31" font-size="15" font-weight="800" fill="var(--vr-text)">42</text>
       </svg>
     </div>
-    <figcaption class="vr-figcaption">Findings by severity (illustrative). A four-bar count reads faster than a table here.</figcaption>
+    <div class="vr-legend">
+      <span class="vr-leg-item"><span class="vr-leg-sw" style="background:var(--vr-crit)"></span>Critical</span>
+      <span class="vr-leg-item"><span class="vr-leg-sw" style="background:var(--vr-high)"></span>High</span>
+      <span class="vr-leg-item"><span class="vr-leg-sw" style="background:var(--vr-med)"></span>Medium</span>
+      <span class="vr-leg-item"><span class="vr-leg-sw" style="background:var(--vr-low)"></span>Low</span>
+      <span class="vr-leg-item"><span class="vr-leg-sw" style="background:var(--vr-faint)"></span>Info</span>
+    </div>
+    <figcaption class="vr-figcaption">Severity mix (illustrative). Hover a segment for its count; the tiles above give every number.</figcaption>
   </figure>
 
   <!-- 5. DRILLDOWN: deep context folded away so the main flow stays scannable -->
