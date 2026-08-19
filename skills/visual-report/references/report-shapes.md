@@ -81,6 +81,33 @@ Wide-to-narrow. The reader stops at the level that answers their question.
 - A distribution, a trend, or a part-to-whole worth showing → a **chart** inside the
   relevant section.
 
+## Rich content blocks
+
+All self-contained, no library, no CDN.
+
+### Code block
+- **Fits:** a snippet, a fix, a config, a command. More than the one offending line
+  (that stays in `.vr-evidence`).
+- **Markup:** `<pre class="vr-code" data-lang="php">` with HTML-escaped code
+  (`&lt; &gt; &amp;`). The template's inline highlighter colours comments, strings,
+  numbers, keywords, and calls at load (`.tok-*`), in both delivery modes. Escaping
+  is mandatory, raw `<script>`/`<img>` would execute before the highlighter runs.
+  `data-hl="off"` keeps a block verbatim; hand-wrap `.tok-*` spans for full control.
+  No syntax library is bundled, so highlighting is approximate, not a full parser.
+
+### Table
+- **Fits:** a small grid, category by measure (findings per service, options by
+  attribute). Not a substitute for prose on a single row.
+- **Markup:** `<table class="vr-table">` with a `<caption>` title and a `<th>` header
+  row, wrapped in `<div class="vr-scroll">` so a wide table scrolls instead of
+  breaking the column. Even rows are zebra-striped by the template.
+
+### Formula
+- **Fits:** a scoring rule or derivation where the equation reads better than a
+  sentence. Rare, use sparingly.
+- **Markup:** native MathML in `<div class="vr-math"><math display="block">...</math></div>`.
+  Browsers render MathML with no library. KaTeX/LaTeX is not available (it needs a CDN).
+
 ## Charts are chosen elsewhere
 
 Do not pick the chart type here. Load the `dataviz` skill: it maps the data shape to

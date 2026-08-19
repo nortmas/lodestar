@@ -49,9 +49,13 @@ For any non-trivial input, **emit a short structure plan and show it to the user
 
 1. Copy `assets/report-template.html`. Fill the `{{...}}` slots; compose the body from the blocks in `assets/section-example.html` (metric cards, top-N, sections, items, figures, drilldowns). Do not restyle. The classes are already themed, and the template ships thin theme-aware scrollbars, so code blocks and wide figures scroll cleanly.
 2. Charts: inline `<svg>` only, using the `--vr-cat-*` palette variables. No CDN, no `<script src>`, no web fonts, no remote images. In Artifact mode a `<pre class="mermaid">` diagram also renders natively; in local-file mode use inline SVG so it works offline.
-3. Many sections? Do NOT emit a flat row of buttons that wraps to a second line. Take a pattern from `assets/nav-example.html`: a two-level top nav for a handful of pages, or a left sidebar (with per-page count badges) past about six pages. Each page is a `<section class="vr-tabpage" data-tab="ID">` and the script shows one at a time.
-4. **Load `artifact-design` before writing an Artifact** (its own contract requires this) to calibrate layout and the "not overloaded" balance. Use `artifact-diagramming` for any diagram.
-5. Package for the chosen mode:
+3. Rich content blocks (all self-contained, no library):
+   - **Code**: put HTML-escaped code (`&lt; &gt; &amp;`) in `<pre class="vr-code" data-lang="php">`. The template's inline highlighter colours comments, strings, numbers, keywords, and calls at load, in both modes. Escaping is required, raw `<script>`/`<img>` would execute. Add `data-hl="off"` to keep a block verbatim.
+   - **Tables**: `<table class="vr-table">` with a `<caption>` and `<th>` header, wrapped in `<div class="vr-scroll">` so wide tables scroll.
+   - **Formulas**: native MathML in `<div class="vr-math"><math>...</math></div>`. No KaTeX (that needs a CDN). Use only when a formula reads better than prose.
+4. Many sections? Do NOT emit a flat row of buttons that wraps to a second line. Take a pattern from `assets/nav-example.html`: a two-level top nav for a handful of pages, or a left sidebar (with per-page count badges) past about six pages. Each page is a `<section class="vr-tabpage" data-tab="ID">` and the script shows one at a time.
+5. **Load `artifact-design` before writing an Artifact** (its own contract requires this) to calibrate layout and the "not overloaded" balance. Use `artifact-diagramming` for any diagram.
+6. Package for the chosen mode:
    - **Local file**: write the full `report-template.html` document to disk with `data-review="on"` (via the `{{REVIEW_MODE}}` slot). The review layer and Save & download work from `file://`.
    - **Artifact**: the Artifact tool wraps your file in its OWN `<!doctype>/<html>/<head>/<body>` and controls the theme, so publish a FRAGMENT, not a full document: a `<title>`, then the template's `<style>` block, then the body content, then the `<script>`s. Drop the `<!doctype>/<html>/<head>/<body>` wrappers and do not set `data-review` (the template centers when it is absent and the review engine stays off). Then publish with the Artifact tool and hand over the link.
 

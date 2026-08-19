@@ -24,11 +24,12 @@
     --vr-bg:#f6f8fa; --vr-surface:#ffffff; --vr-surface-2:#f0f3f7;
     --vr-text:#1c2530; --vr-muted:#5b6673; --vr-faint:#8a94a1;
     --vr-border:#e3e8ee; --vr-border-strong:#cfd4dc;
-    --vr-accent:#2563eb; --vr-accent-fg:#ffffff;
+    --vr-accent:#2563eb; --vr-accent-fg:#ffffff; --vr-bar:#7c3aed;
     --vr-crit:#b3261e; --vr-high:#c2410c; --vr-med:#b7791f; --vr-low:#2563eb; --vr-ok:#15803d;
     /* categorical palette for injected charts: swap in {{THEME_TOKENS}} if branded */
     --vr-cat-1:#2563eb; --vr-cat-2:#7c3aed; --vr-cat-3:#0891b2;
     --vr-cat-4:#c2410c; --vr-cat-5:#15803d; --vr-cat-6:#b7791f;
+    --tok-com:#6a737d; --tok-kw:#cf222e; --tok-str:#0a7a2f; --tok-num:#0550ae; --tok-fn:#8250df; --tok-path:#7a8291;
     --vr-shadow:0 1px 3px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.10);
     --vr-shadow-lg:0 12px 32px rgba(16,24,40,.14);
     --vr-radius:12px; --vr-gutter-w:340px; --vr-content-w:760px;
@@ -40,10 +41,11 @@
       --vr-bg:#0e1116; --vr-surface:#161b22; --vr-surface-2:#1c232d;
       --vr-text:#e6edf3; --vr-muted:#9aa7b4; --vr-faint:#6e7b8a;
       --vr-border:#2a323c; --vr-border-strong:#3a444f;
-      --vr-accent:#4f8cff; --vr-accent-fg:#0b0e13;
+      --vr-accent:#4f8cff; --vr-accent-fg:#0b0e13; --vr-bar:#a274ff;
       --vr-crit:#f2544b; --vr-high:#f0813f; --vr-med:#e0b13a; --vr-low:#4f8cff; --vr-ok:#4ac97e;
       --vr-cat-1:#4f8cff; --vr-cat-2:#a274ff; --vr-cat-3:#33c2dd;
       --vr-cat-4:#f0813f; --vr-cat-5:#4ac97e; --vr-cat-6:#e0b13a;
+      --tok-com:#8b949e; --tok-kw:#ff7b72; --tok-str:#7ee787; --tok-num:#79c0ff; --tok-fn:#d2a8ff; --tok-path:#8a97a6;
       --vr-shadow:0 1px 3px rgba(0,0,0,.4); --vr-shadow-lg:0 12px 32px rgba(0,0,0,.5);
     }
   }
@@ -51,10 +53,11 @@
     --vr-bg:#0e1116; --vr-surface:#161b22; --vr-surface-2:#1c232d;
     --vr-text:#e6edf3; --vr-muted:#9aa7b4; --vr-faint:#6e7b8a;
     --vr-border:#2a323c; --vr-border-strong:#3a444f;
-    --vr-accent:#4f8cff; --vr-accent-fg:#0b0e13;
+    --vr-accent:#4f8cff; --vr-accent-fg:#0b0e13; --vr-bar:#a274ff;
     --vr-crit:#f2544b; --vr-high:#f0813f; --vr-med:#e0b13a; --vr-low:#4f8cff; --vr-ok:#4ac97e;
     --vr-cat-1:#4f8cff; --vr-cat-2:#a274ff; --vr-cat-3:#33c2dd;
     --vr-cat-4:#f0813f; --vr-cat-5:#4ac97e; --vr-cat-6:#e0b13a;
+    --tok-com:#8b949e; --tok-kw:#ff7b72; --tok-str:#7ee787; --tok-num:#79c0ff; --tok-fn:#d2a8ff; --tok-path:#8a97a6;
     --vr-shadow:0 1px 3px rgba(0,0,0,.4); --vr-shadow-lg:0 12px 32px rgba(0,0,0,.5);
   }
 
@@ -85,20 +88,27 @@
   .vr-subtitle{color:var(--vr-muted);font-size:1.02rem;margin:0}
   .vr-meta{margin-top:12px;font-size:.8rem;color:var(--vr-faint)}
 
-  /* ---- metric cards ---- */
-  .vr-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin:8px 0 32px}
-  .vr-metric{background:var(--vr-surface);border:1px solid var(--vr-border);border-radius:var(--vr-radius);
-    padding:16px;box-shadow:var(--vr-shadow)}
-  .vr-metric-value{font-size:1.8rem;font-weight:800;line-height:1}
-  .vr-metric-label{margin-top:6px;font-size:.78rem;color:var(--vr-muted)}
+  /* ---- metric cards: centred, compact, one row, equal height, value never wraps ---- */
+  .vr-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:12px;margin:10px 0 32px}
+  .vr-metric{background:var(--vr-surface);border:1px solid var(--vr-border);border-radius:14px;
+    padding:15px 12px;box-shadow:var(--vr-shadow);min-height:88px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;
+    transition:border-color .15s ease,transform .15s ease}
+  .vr-metric:hover{border-color:var(--vr-border-strong);transform:translateY(-1px)}
+  .vr-metric-value{font-size:1.7rem;font-weight:800;line-height:1.1;letter-spacing:-.01em;white-space:nowrap}
+  .vr-metric-label{font-size:.7rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--vr-muted)}
   .vr-metric[data-tone="crit"] .vr-metric-value{color:var(--vr-crit)}
   .vr-metric[data-tone="high"] .vr-metric-value{color:var(--vr-high)}
   .vr-metric[data-tone="med"]  .vr-metric-value{color:var(--vr-med)}
+  .vr-metric[data-tone="low"]  .vr-metric-value{color:var(--vr-low)}
   .vr-metric[data-tone="ok"]   .vr-metric-value{color:var(--vr-ok)}
 
   /* ---- section + item ---- */
   .vr-section{margin:36px 0}
-  .vr-section > h2{font-size:1.25rem;font-weight:700;margin:0 0 4px;scroll-margin-top:16px}
+  .vr-section > h2{position:relative;font-size:1.25rem;font-weight:700;margin:0 0 4px;scroll-margin-top:16px;
+    padding-left:14px}
+  .vr-section > h2::before{content:"";position:absolute;left:0;top:.14em;bottom:.14em;width:4px;
+    border-radius:2px;background:var(--vr-bar)}
   .vr-section-note{color:var(--vr-muted);font-size:.9rem;margin:0 0 16px}
   .vr-item{background:var(--vr-surface);border:1px solid var(--vr-border);border-left:3px solid var(--vr-border-strong);
     border-radius:var(--vr-radius);padding:16px 18px;margin:12px 0;box-shadow:var(--vr-shadow)}
@@ -121,6 +131,35 @@
     border:1px solid var(--vr-border);border-radius:8px;padding:10px 12px;overflow-x:auto;white-space:pre}
   .vr-scope{margin-top:8px;font-size:.8rem;color:var(--vr-muted)}
   .vr-scope b{color:var(--vr-text)}
+
+  /* ---- code block + syntax tokens (highlighted at load by the inline
+     highlighter; no library, no CDN). Also works on .vr-evidence[data-lang]. ---- */
+  .vr-code{position:relative;margin:12px 0 0;font-family:var(--vr-mono);font-size:.82rem;line-height:1.5;
+    background:var(--vr-surface-2);border:1px solid var(--vr-border);border-radius:8px;
+    padding:12px 14px;overflow-x:auto;white-space:pre;tab-size:2}
+  .vr-code[data-lang]{padding-top:26px}
+  .vr-code[data-lang]::before{content:attr(data-lang);position:absolute;top:0;right:0;
+    font:700 .6rem/1 var(--vr-font);letter-spacing:.06em;text-transform:uppercase;color:var(--vr-faint);
+    background:var(--vr-surface);border:1px solid var(--vr-border);border-top:none;border-right:none;
+    border-radius:0 8px 0 8px;padding:4px 8px}
+  .tok-com{color:var(--tok-com);font-style:italic}
+  .tok-kw{color:var(--tok-kw)}
+  .tok-str{color:var(--tok-str)}
+  .tok-num{color:var(--tok-num)}
+  .tok-fn{color:var(--tok-fn)}
+  .tok-path{color:var(--tok-path)}
+  .tok-lineno{color:var(--tok-num);font-weight:600}
+
+  /* ---- tables: wrap in <div class="vr-scroll"> for width ---- */
+  .vr-table{border-collapse:collapse;width:100%;font-size:.88rem;margin:4px 0}
+  .vr-table caption{caption-side:top;text-align:left;color:var(--vr-muted);font-size:.8rem;margin-bottom:6px}
+  .vr-table th,.vr-table td{border:1px solid var(--vr-border);padding:7px 10px;text-align:left;vertical-align:top}
+  .vr-table th{background:var(--vr-surface-2);font-weight:700;white-space:nowrap}
+  .vr-table tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--vr-surface-2) 55%,transparent)}
+
+  /* ---- math: native MathML, no library. Wrap wide equations so they scroll. ---- */
+  .vr-math{margin:12px 0;overflow-x:auto;text-align:center}
+  .vr-math math{font-size:1.15em}
 
   /* ---- top-N priority list ---- */
   .vr-topn{background:var(--vr-surface);border:1px solid var(--vr-border);border-radius:var(--vr-radius);
@@ -316,10 +355,43 @@
     document.addEventListener('pointerout',function(e){if(hit(e.target))tip.style.display='none';});
   })();
 
+  /* ---- code syntax highlighting: no library, no CDN. The report author writes
+     raw (HTML-escaped) code in <pre class="vr-code" data-lang="php">; this colours
+     it at load. One ordered-alternation pass, so keywords inside strings/comments
+     are never re-matched. Set data-hl="off" to keep a block verbatim, or hand-wrap
+     tokens in .tok-* spans yourself. Runs in every mode, read-only included. */
+  (function(){
+    var KW='abstract|and|as|async|await|break|case|catch|class|const|continue|def|default|del|do|elif|else|elseif|end|enum|except|export|extends|false|final|finally|fn|for|foreach|from|func|function|global|if|implements|import|in|instanceof|interface|is|lambda|let|match|module|namespace|new|nil|none|not|null|or|package|pass|print|private|protected|public|raise|require|return|self|static|struct|super|switch|then|this|throw|trait|true|try|type|typeof|use|var|void|while|with|yield';
+    var TOK=new RegExp(
+      '((?:[\\w@.\\-]+\\/)+[\\w@.\\-]+\\.[A-Za-z][\\w]*(?::\\d+(?:[-\\u2013]\\d+)?)?|\\b[\\w.\\-]+\\.(?:php|tsx?|jsx?|mjs|cjs|py|rb|go|java|rs|json|ya?ml|sh|sql|env|xml|html?|css|md)\\b(?::\\d+(?:[-\\u2013]\\d+)?)?)'+  /* 1 path:line (dimmed, not code) */
+      '|(\\/\\*[\\s\\S]*?\\*\\/|(?<![:\\/])\\/\\/[^\\n]*|#[^\\n]*)'+               /* 2 comment */
+      '|("(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|`[^`]*`)'+                /* 3 string  */
+      '|(\\b\\d[\\d_]*\\.?\\d*(?:[eE][+-]?\\d+)?\\b)'+                            /* 4 number  */
+      '|(?<![\\w.$-])((?:'+KW+'))(?![\\w.$-])'+                                   /* 5 keyword (never inside a name) */
+      '|(\\b[A-Za-z_]\\w*(?=\\s*\\())','g');                                     /* 6 call    */
+    function h(raw){
+      var e=raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return e.replace(TOK,function(m,path,com,str,num,kw,fn){
+        if(path)return '<span class="tok-path">'+path.replace(/(:\d+(?:[-–]\d+)?)$/,'<span class="tok-lineno">$1</span>')+'</span>';
+        if(com)return '<span class="tok-com">'+com+'</span>';
+        if(str)return '<span class="tok-str">'+str+'</span>';
+        if(num)return '<span class="tok-num">'+num+'</span>';
+        if(kw) return '<span class="tok-kw">'+kw+'</span>';
+        if(fn) return '<span class="tok-fn">'+fn+'</span>';
+        return m;
+      });
+    }
+    document.querySelectorAll('pre.vr-code:not([data-hl]), pre.vr-evidence:not([data-hl])').forEach(function(pre){
+      if(pre.getAttribute('data-hl')==='off') return;
+      pre.innerHTML=h(pre.textContent);
+      pre.setAttribute('data-hl','done');
+    });
+  })();
+
   if(document.documentElement.getAttribute('data-review')!=='on') return;  /* read-only mode: stop here */
 
   var SEED_ID='vr-seed';
-  var ANCHOR_SEL='.vr-item, .vr-topn-row, .vr-metric, .vr-section > h2, .vr-explain, .vr-evidence, .vr-drill-body p, figcaption.vr-figcaption';
+  var ANCHOR_SEL='.vr-item, .vr-topn-row, .vr-metric, .vr-section > h2, .vr-explain, .vr-evidence, .vr-code, .vr-table, .vr-drill-body p, figcaption.vr-figcaption';
   var SECTION_SEL='.vr-section > h2';
   var STATUSES=['needs_agent_review','needs_user_reply','resolved'];
   /* Key the store to path AND a hash of the report body, so regenerating the

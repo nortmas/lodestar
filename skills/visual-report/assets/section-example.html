@@ -91,3 +91,56 @@
     </div>
   </details>
 </section>
+
+<!-- 6. CODE BLOCK, highlighted. Write RAW code, HTML-escaped (&lt; &gt; &amp;), in
+        <pre class="vr-code" data-lang="LANG">. The template's inline highlighter
+        colours it at load: comments, strings, numbers, keywords, calls. No library.
+        Use data-hl="off" to keep a block verbatim; the "evidence" one line that IS the
+        bug stays as .vr-evidence (add data-lang there too if you want it coloured). -->
+<section class="vr-section">
+  <h2>Suggested fix</h2>
+  <p class="vr-section-note">The constant-time comparison the legacy path is missing.</p>
+  <pre class="vr-code" data-lang="php">// legacy path: timing-leakable
+if ($key !== $stored) {
+    return response('forbidden', 403);
+}
+
+// fix: constant-time compare
+if (!hash_equals($stored, (string) $key)) {
+    return response('forbidden', 403);
+}</pre>
+</section>
+
+<!-- 7. TABLE. Wrap in <div class="vr-scroll"> so wide tables scroll instead of
+        breaking the layout. Use a <caption> for the title; <th> for the header row. -->
+<section class="vr-section">
+  <h2>Findings by service</h2>
+  <div class="vr-scroll">
+    <table class="vr-table">
+      <caption>Confirmed findings per service and severity.</caption>
+      <thead><tr><th>Service</th><th>Critical</th><th>High</th><th>Medium</th><th>Total</th></tr></thead>
+      <tbody>
+        <tr><td>Laravel app</td><td>2</td><td>5</td><td>9</td><td>16</td></tr>
+        <tr><td>RAG service</td><td>1</td><td>4</td><td>6</td><td>11</td></tr>
+        <tr><td>Scraper</td><td>0</td><td>2</td><td>3</td><td>5</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 8. FORMULA. Native MathML (no library, no CDN). Wrap in <div class="vr-math">.
+        Use only when a formula genuinely communicates better than prose. -->
+<section class="vr-section">
+  <h2>Risk score</h2>
+  <p class="vr-section-note">How the headline score is derived.</p>
+  <div class="vr-math">
+    <math display="block">
+      <mi>score</mi><mo>=</mo>
+      <mn>100</mn><mo>-</mo>
+      <mn>20</mn><mo>&#8290;</mo><mi>C</mi><mo>-</mo>
+      <mn>10</mn><mo>&#8290;</mo><mi>H</mi><mo>-</mo>
+      <mn>4</mn><mo>&#8290;</mo><mi>M</mi><mo>-</mo>
+      <mi>L</mi>
+    </math>
+  </div>
+</section>
