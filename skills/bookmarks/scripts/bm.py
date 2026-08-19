@@ -40,6 +40,17 @@ DB = os.path.join(DATA_DIR, "index.db")
 CONFIG = os.path.join(DATA_DIR, "config.json")
 BACKUPS = os.path.join(DATA_DIR, "backups")
 
+# Chrome derives an unpacked extension's id from its LOAD PATH. The skill ships
+# the extension next to bm.py, but that folder lives in the versioned plugin
+# cache and moves on every update — so an extension loaded from there dies each
+# time. STABLE_EXT never moves; sync_extension() copies the current code into it
+# so the code stays fresh while the load path stays put. Load the extension from
+# STABLE_EXT, once, forever.
+STABLE_EXT = os.path.join(DATA_DIR, "extension")
+BUNDLED_EXT = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "extension"))
+_EXT_FILES = ("manifest.json", "background.js")
+
 WEBKIT_EPOCH = datetime(1601, 1, 1, tzinfo=timezone.utc).timestamp()
 ROOTS = ("bookmark_bar", "other", "synced")
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " \
@@ -1769,7 +1780,8 @@ def cmd_apply(args):
             "file will be undone by sync.\n"
             "  Apply changes through the extension instead:\n"
             "    1. bm.py bridge         (starts the local relay)\n"
-            "    2. load the extension in chrome://extensions if not already\n"
+            "    2. in chrome://extensions, Load unpacked from the stable path\n"
+            f"       {STABLE_EXT}   (if not already loaded)\n"
             "    3. bm.py apply-live <patch>\n"
             "  (--force-file overrides, but the change will not stick under sync.)")
 
@@ -2225,6 +2237,8 @@ def cmd_call(args):
     resp = conn.getresponse().read().decode("utf-8")
     conn.close()
     print(resp)
+    if "extension not connected" in resp:
+        print("hint: " + extension_hint(), file=sys.stderr)
 
 
 def _bridge_is_up(port):
@@ -2254,6 +2268,93 @@ def _extension_connected(port):
         return False
 
 
+def sync_extension(write=True):
+    """Mirror the bundled extension into STABLE_EXT so its code stays current
+    while its load path never moves. Returns (present, changed, note). With
+    write=False it only inspects, so `status` can report without mutating."""
+    try:
+        if not os.path.isdir(BUNDLED_EXT):
+            return (os.path.isdir(STABLE_EXT), False, "bundled source not found")
+        changed = False
+        for name in _EXT_FILES:
+            src = os.path.join(BUNDLED_EXT, name)
+            if not os.path.exists(src):
+                continue
+            dst = os.path.join(STABLE_EXT, name)
+            new = open(src, "rb").read()
+            old = open(dst, "rb").read() if os.path.exists(dst) else None
+            if new != old:
+                changed = True
+                if write:
+                    os.makedirs(STABLE_EXT, exist_ok=True)
+                    with open(dst, "wb") as f:
+                        f.write(new)
+        present = os.path.isdir(STABLE_EXT)
+        if not present:
+            return (False, changed, "not created yet")
+        if changed:
+            return (True, True, "updated" if write else "stale (run any command to refresh)")
+        return (True, False, "current")
+    except OSError as exc:
+        return (os.path.isdir(STABLE_EXT), False, f"error: {exc}")
+
+
+def _chrome_profiles_dir():
+    base = os.path.expanduser("~/Library/Application Support/Google/Chrome")
+    if not os.path.isdir(base):
+        base = os.path.expanduser("~/.config/google-chrome")
+    return base
+
+
+def loaded_extensions():
+    """Best-effort scan of Chrome's per-profile prefs for this skill's unpacked
+    extension. Returns [{profile, id, path, exists, is_stable}]. Never raises."""
+    import glob as _glob
+    out, base = [], _chrome_profiles_dir()
+    prefs = _glob.glob(os.path.join(base, "*", "Secure Preferences")) + \
+        _glob.glob(os.path.join(base, "*", "Preferences"))
+    for pref in prefs:
+        try:
+            d = json.load(open(pref))
+        except (OSError, ValueError):
+            continue
+        prof = os.path.basename(os.path.dirname(pref))
+        exts = (d.get("extensions") or {}).get("settings") or {}
+        for eid, meta in exts.items():
+            path = str(meta.get("path", ""))
+            if os.path.basename(path.rstrip("/")) != "extension":
+                continue
+            if "bookmarks" not in path:
+                continue
+            out.append({
+                "profile": prof, "id": eid, "path": path,
+                "exists": os.path.isdir(path),
+                "is_stable": os.path.normpath(path) == os.path.normpath(STABLE_EXT),
+            })
+    return out
+
+
+def extension_hint():
+    """One line tuned to what Chrome actually has loaded, for when the extension
+    is not answering."""
+    exts = loaded_extensions()
+    broken = [e for e in exts if not e["exists"]]
+    stable_ok = [e for e in exts if e["is_stable"] and e["exists"]]
+    if broken and not stable_ok:
+        return ("the extension is loaded from a folder that no longer exists\n"
+                f"    ({broken[0]['path']})\n"
+                "  that path moved with a plugin update. In chrome://extensions "
+                "remove it, then Load unpacked from the stable path:\n"
+                f"    {STABLE_EXT}")
+    if stable_ok:
+        return ("the extension is loaded from the stable path but its Chrome "
+                "service worker is asleep — wait a few seconds and retry, or open "
+                "chrome://extensions to wake it.")
+    return ("no bookmarks extension is loaded. In chrome://extensions enable "
+            "Developer mode, then Load unpacked from:\n"
+            f"    {STABLE_EXT}")
+
+
 def ensure_bridge(port):
     """Make sure the relay is running before a call needs it. If nothing is
     listening, spawn a detached `bm.py bridge` and wait for it to accept
@@ -2261,6 +2362,7 @@ def ensure_bridge(port):
     socket. Returns True once the relay is up. Starting the relay does not load
     the Chrome extension — that is the user's one manual step — so a running
     relay with no extension still surfaces "extension not connected"."""
+    sync_extension()  # keep the stable copy's code current; path stays put
     if _bridge_is_up(port):
         return True
     log_path = os.path.join(DATA_DIR, "bridge.log")
@@ -2301,6 +2403,8 @@ def _bridge_call(port, cmd, cargs=None, timeout=60):
         die(f"cannot reach the bridge on 127.0.0.1:{port} ({exc}) even after trying "
             f"to start it. Start it by hand with: bm.py bridge")
     if isinstance(resp, dict) and resp.get("error"):
+        if "not connected" in str(resp.get("error")):
+            die(f"extension error: {resp['error']}\nhint: {extension_hint()}")
         die(f"extension error: {resp['error']}")
     if isinstance(resp, dict) and "result" in resp:
         return resp["result"]
@@ -2524,6 +2628,21 @@ def cmd_status(args):
               "Unset it before touching a live profile.")
     print(f"backups         {len(backups)}"
           + (f", newest {backups[-1]}" if backups else " — none yet"))
+
+    _, _, note = sync_extension(write=False)
+    print(f"extension       stable copy {STABLE_EXT} ({note})")
+    exts = loaded_extensions()
+    if not exts:
+        print("  not loaded in Chrome — Load unpacked from the stable path above")
+    for e in exts:
+        if not e["exists"]:
+            print(f"  [{e['profile']}] BROKEN: {e['path']}"
+                  "  <-- folder gone, reload from the stable path")
+        elif e["is_stable"]:
+            print(f"  [{e['profile']}] stable: {e['path']}")
+        else:
+            print(f"  [{e['profile']}] other path: {e['path']}"
+                  "  <-- will break on an update; reload from the stable path")
 
 
 # ---------------------------------------------------------------- cli

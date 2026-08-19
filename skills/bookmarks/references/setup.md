@@ -264,7 +264,15 @@ bm.py bridge        # 127.0.0.1:8787
 1. Open `chrome://extensions`.
 2. Turn on **Developer mode** (top-right).
 3. **Load unpacked** → choose
-   `~/.claude/skills/lodestar/skills/bookmarks/extension`.
+   `~/.claude/bookmarks/extension`.
+
+**Load it from `~/.claude/bookmarks/extension`, never from the skill's own folder.**
+Chrome ties an unpacked extension to its load path, and the skill folder lives in the
+versioned plugin cache — it moves on every update, so a helper loaded from there dies each
+time (the folder it points at is gone). `~/.claude/bookmarks/extension` never moves;
+`bm.py` mirrors the current extension code into it on every run, so the code stays fresh
+while the path stays put. `bm.py status` reports which folder Chrome loaded it from and
+flags a wrong or missing one.
 
 It appears as **"Bookmark Agent Bridge"**. Leave it enabled. It self-heals: a
 `chrome.alarms` wake fires every minute so the worker reconnects to the bridge on its own

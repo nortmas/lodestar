@@ -129,9 +129,13 @@ to know what they can do and that it is safe. Cover:
   1. In Chrome, open `chrome://extensions`.
   2. Turn on **Developer mode** (switch, top-right).
   3. Click **Load unpacked** and choose the folder
-     `~/.claude/skills/lodestar/skills/bookmarks/extension`.
-  Then it's ready. If I ever say I can't reach your bookmarks, this helper just needs
-  switching back on there.
+     `~/.claude/bookmarks/extension`.
+  Then it's ready. **Always load it from `~/.claude/bookmarks/extension`, never from
+  the skill's own folder** — the skill folder moves on every plugin update and a helper
+  loaded from there would break each time; `~/.claude/bookmarks/extension` never moves,
+  and `bm.py` keeps its code current on its own. `bm.py status` shows which folder Chrome
+  loaded it from and warns if it is the wrong one. If I ever say I can't reach your
+  bookmarks, this helper just needs switching back on there.
 - **The commands, as a table** — a `Command | what it does` grid (like the Commands
   table above), one plain-language line each: `reshape` = re-sort a folder from scratch;
   `rename` = give everything short, clear names; `tidy` = quick cleanup; `merge` =

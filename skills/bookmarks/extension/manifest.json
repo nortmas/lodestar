@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Bookmark Agent Bridge",
+  "name": "Lodestar Bookmarks (Claude Code)",
   "version": "1.1",
-  "description": "Executes bookmark operations sent by the local bm.py bridge over a localhost WebSocket. No data leaves the machine.",
+  "description": "Helper for the Claude Code skill lodestar:bookmarks. It lets Claude search, file and tidy your Chrome bookmarks — running only the bookmark actions Claude sends over a local connection on this computer. Nothing leaves the machine.",
   "permissions": ["bookmarks", "alarms"],
   "background": { "service_worker": "background.js" }
 }
