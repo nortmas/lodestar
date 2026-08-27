@@ -1,0 +1,202 @@
+<!doctype html>
+<!--
+  visual-tuner template. Copy this file to a FRESH filename per session (anti-cache),
+  fill the {{...}} slots, then open with `open`.
+
+  What you edit:
+    {{TITLE}}        - what is being tuned, e.g. "Connector between card A and B"
+    {{STAGE_BG}}     - the real app background behind the target (CSS color/gradient/image)
+    {{TARGET}}       - a pixel-accurate copy of the real component's markup + <style>.
+                       Every property being tuned reads a CSS var: e.g. left: var(--x);
+    {{CONTROLS}}     - one control per axis (see the contract below and control-types.md)
+    {{STATES}}       - optional state switcher buttons; delete the block if no states
+
+  Control contract (the engine auto-wires everything):
+    data-var="--x"        CSS variable this control drives (required)
+    data-prop="left"      real CSS property name shown in the readout (required)
+    data-unit="px"        appended to numeric value (px/rem/%/em/… ; omit for unitless)
+    data-target="#sel"    element the var is set on (optional; defaults to :root)
+    data-selector=".foo"  readout grouping label (optional; defaults to "target")
+
+  Range  -> <input type="range" class="vt-ctl" ...>
+  Color  -> <input type="color" class="vt-ctl" ...>   (value shown as hex)
+  Font   -> <select class="vt-ctl" ...><option value="stack">…  (value = the stack)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tuner — {{TITLE}}</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; display: grid;
+    grid-template-columns: 320px 1fr;
+    font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #16181d; color: #e6e8ec;
+  }
+
+  /* ---- control panel ---- */
+  .vt-panel {
+    overflow-y: auto; padding: 18px 16px; border-right: 1px solid #2a2e37;
+    background: #1b1e24; display: flex; flex-direction: column; gap: 4px;
+  }
+  .vt-panel h1 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+    color: #8a90a0; margin: 0 0 14px; font-weight: 600; }
+  .vt-ctl-row { padding: 10px 0; border-bottom: 1px solid #23262e; }
+  .vt-ctl-row label { display: flex; justify-content: space-between; align-items: baseline;
+    font-weight: 500; margin-bottom: 6px; }
+  .vt-ctl-row .vt-val {
+    font: 12px/1 ui-monospace, "SF Mono", Menlo, monospace;
+    color: #7dd3fc; background: #0f1116; padding: 3px 7px; border-radius: 5px; }
+  input[type=range] { width: 100%; accent-color: #7dd3fc; }
+  input[type=color] { width: 100%; height: 34px; border: 1px solid #2a2e37;
+    border-radius: 6px; background: #0f1116; cursor: pointer; }
+  select.vt-ctl { width: 100%; padding: 7px 8px; border: 1px solid #2a2e37;
+    border-radius: 6px; background: #0f1116; color: #e6e8ec; }
+
+  /* ---- states ---- */
+  .vt-states { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
+  .vt-states button {
+    padding: 5px 11px; border: 1px solid #2a2e37; border-radius: 999px;
+    background: #0f1116; color: #b6bccb; cursor: pointer; font-size: 12px; }
+  .vt-states button[aria-pressed=true] { background: #7dd3fc; color: #0f1116;
+    border-color: #7dd3fc; font-weight: 600; }
+
+  /* ---- stage + readout ---- */
+  .vt-main { display: grid; grid-template-rows: 1fr auto; overflow: hidden; }
+  .vt-stage {
+    display: grid; place-items: center; overflow: auto; padding: 32px;
+    background: {{STAGE_BG}};
+  }
+  .vt-readout {
+    border-top: 1px solid #2a2e37; background: #0f1116; padding: 14px 18px;
+    max-height: 38vh; overflow: auto; }
+  .vt-readout .vt-head { display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px; }
+  .vt-readout h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+    color: #8a90a0; margin: 0; font-weight: 600; }
+  .vt-copy { padding: 5px 12px; border: 1px solid #2a2e37; border-radius: 6px;
+    background: #1b1e24; color: #7dd3fc; cursor: pointer; font-size: 12px; }
+  .vt-copy:active { background: #7dd3fc; color: #0f1116; }
+  #vt-css {
+    font: 14px/1.7 ui-monospace, "SF Mono", Menlo, monospace;
+    white-space: pre; margin: 0; color: #e6e8ec; user-select: all; }
+  #vt-css .vt-sel { color: #f0a868; }
+  #vt-css .vt-key { color: #7dd3fc; }
+  #vt-css .vt-num { color: #a5d6a7; }
+</style>
+</head>
+<body>
+
+  <aside class="vt-panel">
+    <h1>{{TITLE}}</h1>
+
+    <!-- {{STATES}}  delete this block if the target has no states -->
+    <div class="vt-states" data-state-target="#vt-target" data-state-attr="data-state">
+      <button data-state-value="default" aria-pressed="true">Default</button>
+      <button data-state-value="hover">Hover</button>
+    </div>
+    <!-- end states -->
+
+    <!-- {{CONTROLS}}  one .vt-ctl-row per axis -->
+    <div class="vt-ctl-row">
+      <label>Left offset <span class="vt-val"></span></label>
+      <input type="range" class="vt-ctl" data-var="--x" data-prop="left"
+             data-unit="px" data-target="#vt-target" data-selector=".connector"
+             min="-40" max="40" step="1" value="0">
+    </div>
+    <!-- end controls -->
+  </aside>
+
+  <main class="vt-main">
+    <div class="vt-stage">
+      <!-- {{TARGET}}  pixel-accurate copy of the real component. Tuned props read var(). -->
+      <div id="vt-target"></div>
+    </div>
+
+    <div class="vt-readout">
+      <div class="vt-head">
+        <h2>CSS — send this back</h2>
+        <button class="vt-copy" id="vt-copy">Copy</button>
+      </div>
+      <pre id="vt-css"></pre>
+    </div>
+  </main>
+
+<script>
+(function () {
+  var ctls = Array.prototype.slice.call(document.querySelectorAll('.vt-ctl'));
+
+  function valueOf(c) {
+    if (c.type === 'color' || c.tagName === 'SELECT') return c.value;
+    return c.value + (c.dataset.unit || '');
+  }
+
+  function apply(c) {
+    var target = c.dataset.target ? document.querySelector(c.dataset.target)
+                                  : document.documentElement;
+    if (target && c.dataset.var) target.style.setProperty(c.dataset.var, valueOf(c));
+    var badge = c.closest('.vt-ctl-row') && c.closest('.vt-ctl-row').querySelector('.vt-val');
+    if (badge) badge.textContent = valueOf(c);
+    render();
+  }
+
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function render() {
+    var groups = {};
+    ctls.forEach(function (c) {
+      var sel = c.dataset.selector || 'target';
+      (groups[sel] = groups[sel] || []).push(c);
+    });
+    var out = [];
+    Object.keys(groups).forEach(function (sel) {
+      out.push('<span class="vt-sel">' + esc(sel) + '</span> {');
+      groups[sel].forEach(function (c) {
+        var v = esc(valueOf(c));
+        out.push('  <span class="vt-key">' + esc(c.dataset.prop) +
+                 '</span>: <span class="vt-num">' + v + '</span>;');
+      });
+      out.push('}');
+    });
+    document.getElementById('vt-css').innerHTML = out.join('\n');
+  }
+
+  ctls.forEach(function (c) {
+    c.addEventListener('input', function () { apply(c); });
+    apply(c);
+  });
+
+  // state switchers
+  document.querySelectorAll('.vt-states').forEach(function (grp) {
+    var tgt = document.querySelector(grp.dataset.stateTarget);
+    var attr = grp.dataset.stateAttr || 'data-state';
+    grp.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        grp.querySelectorAll('button').forEach(function (o) { o.setAttribute('aria-pressed', 'false'); });
+        b.setAttribute('aria-pressed', 'true');
+        if (tgt) tgt.setAttribute(attr, b.dataset.stateValue);
+      });
+    });
+  });
+
+  // copy (clipboard, with select-all fallback for file://)
+  document.getElementById('vt-copy').addEventListener('click', function () {
+    var el = document.getElementById('vt-css');
+    var text = el.textContent;
+    var done = function () { this.textContent = 'Copied'; var b = this;
+      setTimeout(function () { b.textContent = 'Copy'; }, 1200); }.bind(this);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { selectAll(el); });
+    } else { selectAll(el); }
+  });
+  function selectAll(el) {
+    var r = document.createRange(); r.selectNodeContents(el);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+})();
+</script>
+</body>
+</html>
