@@ -35,7 +35,7 @@ The plugin auto-loads from `~/.claude/skills/lodestar/` — no setup needed.
 ### On another machine
 
 ```
-/plugin marketplace add https://github.com/nortmas/lodestar.git
+/plugin marketplace add https://github.com/cyberdmitriy/lodestar.git
 /plugin install lodestar@lodestar-marketplace
 ```
 
